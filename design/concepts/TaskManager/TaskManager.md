@@ -14,19 +14,19 @@
     * a `completed` of type `Boolean`
 * **actions**:
   * `createTask (user: User, title: String, description: String, dueDate?: Date): (task: Task)`
-    * **requires**: `title` is not empty. The `dueDate` has not already passed. 
-    * **effects**: Creates a new task associated with `user`, and sets `completed` := false and `createdAt` := current time. 
+    * **requires**: The title is not empty. The `dueDate` has not already passed. 
+    * **effects**: Creates a new task associated with user, and sets `completed` := false and `createdAt` := current time. 
   * `updateTask (user: User, task: Task, title?: String, description?: String, dueDate?: Date): (task: Task)`
-    * **requires**: `task` belongs to `user`.
-    * **effects**: Updates specified fields of `task`.
+    * **requires**: The task belongs to user.
+    * **effects**: Updates the specified fields of the task.
   * `markStarted (user: User, task: Task)`
-    * **requires**: `task` belongs to user. `task` must have no `startedAt` value.
-    * **effects**: Sets `startedAt` := current time for `task`.
+    * **requires**: The task belongs to user. The task must have `startedAt` = null.
+    * **effects**: Sets `startedAt` := current time for the task.
   * `markComplete (user: User, task: Task)`
-    * **requires**: `task` belongs to user. `task` must have `completed` = false.
-    * **effects**: Sets `completed` := true for `task`.
+    * **requires**: The task belongs to user. The task must have `completed` = false.
+    * **effects**: Sets `completed` := true for the task.
   * `deleteTask (user: User, task: Task)`
-    * **requires**: `task` belongs to `user`.
-    * **effects**: Removes `task` from `user`'s task list.
+    * **requires**: The task belongs to the user.
+    * **effects**: Removes the task from the user's task list.
   * `viewTasks (user: User): (tasks: Task[])`
-    * **effects**: Returns list of all tasks for `user`.
+    * **effects**: Returns a list of all tasks for the user.
