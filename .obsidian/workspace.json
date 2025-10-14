@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "design/concepts/TaskManager/changelog.md",
+                "file": "design/learning/design-progression.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "changelog"
+              "title": "design-progression"
             }
           }
         ]
@@ -169,43 +169,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "c699114e716e646a",
+  "active": "9b42b4503c7d88ad",
   "lastOpenFiles": [
+    "design/concepts/Syncs/concept-syncs.md",
+    "design/concepts/Syncs",
+    "design/concepts/New folder",
+    "design/concepts/UserAuthentication/implementation.md",
+    "design/concepts/UserAuthentication/console-output.md",
+    "design/concepts/UserAuthentication/changelog.md",
+    "design/concepts/UserAuthentication/UserAuthentication.md",
+    "design/concepts/UserAuthentication",
+    "src/concepts/UserAuthentication/UserAuthenticationConcept.test.ts",
+    "src/concepts/UserAuthentication/UserAuthenticationConcept.ts",
+    "src/concepts/UserAuthentication",
+    "src/concepts/UserAuthen",
+    "src/concepts/New folder",
+    "design/concepts/EmotionLogger/EmotionLogger.md",
+    "design/concepts/EmotionLogger/implementation.md",
+    "design/concepts/EmotionLogger/changelog.md",
+    "design/concepts/MicroBet/changelog.md",
+    "design/concepts/NudgeEngine/changelog.md",
+    "design/concepts/TaskManager/changelog.md",
     "design/concepts/LikertSurvey/LikertSurvey.md",
     "design/concepts/TaskManager/TaskManager.md",
     "design/background/concept-specifications.md",
     "design/concepts/LikertSurvey/testing.md",
-    "design/concepts/EmotionLogger/EmotionLogger.md",
     "design/concepts/MicroBet/MicroBet.md",
     "design/concepts/NudgeEngine/NudgeEngine.md",
     "design/concepts/TaskManager/implementation.md",
     "design/concepts/TaskManager/console-output.md",
-    "design/concepts/TaskManager/changelog.md",
     "design/concepts/TaskManager/specification.md",
     "src/concepts/TaskManager/TaskManagerConcept.test.ts",
     "src/concepts/TaskManager/TaskManagerConcept.ts",
-    "src/concepts/TaskManager",
-    "src/concepts/New folder",
-    "design/concepts/TaskManager",
-    "design/concepts/New folder",
     "design/learning/design-progression.md",
-    "design/concepts/EmotionLogger/implementation.md",
     "design/concepts/EmotionLogger/console-output.md",
-    "design/concepts/EmotionLogger/changelog.md",
     "design/concepts/EmotionLogger/specification.md",
     "design/concepts/MicroBet/implementation.md",
     "design/concepts/MicroBet/console-output.md",
-    "design/concepts/MicroBet/changelog.md",
-    "design/concepts/MicroBet/specification.md",
-    "design/concepts/NudgeEngine/implementation.md",
-    "design/concepts/NudgeEngine/changelog.md",
-    "design/concepts/NudgeEngine/specification.md",
-    "design/concepts/NudgeEngine/console-output.md",
-    "design/concepts/NudgeEngine/console.output.md",
-    "design/concepts/NudgeEngine/spec-changelog.md",
-    "design/concepts/EmotionLogger/EmotionLoggerConcept.ts",
-    "design/concepts/EmotionLogger/EmotionLoggerConcept.test.ts",
-    "design/concepts/EmotionLogger",
-    "design/concepts/NudgeEngine/NudgeEngineConcept.ts"
+    "design/concepts/MicroBet/specification.md"
   ]
 }

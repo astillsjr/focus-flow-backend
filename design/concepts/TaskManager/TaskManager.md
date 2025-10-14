@@ -30,3 +30,5 @@
     * **effects**: Removes the task from the user's task list.
   * `viewTasks (user: User): (tasks: Task[])`
     * **effects**: Returns a list of all tasks for the user.
+  * `deleteUserTasks (user: User)`
+    * **effects**: Removes alls tasks created by the specified user.

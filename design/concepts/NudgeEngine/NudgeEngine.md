@@ -13,7 +13,7 @@
 * **actions**:
   * `scheduleNudge (user: User, task: Task, deliveryTime: DateTime)`
     * **requires**: The task belongs to the user. The deliveryTime has not already passed.
-    * **effects**: Creates a new nudge for the user and task with the specified. Sets  deliveryTime.
+    * **effects**: Creates a new nudge for the user and task with the specified deliveryTime.
   * `system nudgeUser (): (nudge: Nudge)`
     * **requires**: The current time has exceeded the `deliveryTime` of a nudge.
     * **effects**: Sends a nudge notification to user. Sets `triggered` := true.
@@ -21,5 +21,7 @@
     * **requires**: The nudge must already have been triggered. 
     * **effects**: Sets `acknowledged` := true. 
   * `cancelNudge (user: User, task: Task)`
-    * **requires**: A nudge must exist for the given user, task pair.
-    * **effects**: Removes the nudge from the set of nudges. 
+    * **requires**: A nudge must exist for the given user-task pair. The nudge must not have already been triggered.
+    * **effects**: Removes the nudge from the set of nudges.
+  * `deleteUserNudges (user: User)`
+    * **effects**: Removes all nudges targeted at the specified user.  

@@ -10,8 +10,13 @@
     * a `phase` of type `String` ("before"|"after")
     * an `emotion` Enum(“dreading”, “anxious”, “neutral”, “motivated”, etc.)
 * **actions**:
-  * `logEmotion (user: User, task: Task, phase: String, emotion: Emotion)`
+  * `logEmotion (user: User, task: Task, phase: String, emotion: Emotion): (log: Log)`
     * **requires**: `phase` in {“before”, “after”}
-    * **effects**: Adds new log entry for the user, task pair for that phase.
+    * **effects**: Adds new log entry for the user-task pair for that phase.
+  * `deleteTaskLog (user: User, task: Task)`
+    * **requires**: The log for the user-task pair exists.
+    * **effects**: Removes the log from the users logs.
   * `viewEmotionTrends (user: User): (trends: Data)`
     * **effects**: Returns summary statistics or visual data of emotional shifts.
+  * `deleteUserLogs (user: User)`
+    * **effects**: Removes all emotion logs logged by the specified user.

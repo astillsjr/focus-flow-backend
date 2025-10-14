@@ -14,9 +14,18 @@
     * a `deadline` of type `Date`
     * a `success?` of type `Boolean`
 * **actions**:
-  * `placeBet (user: User, task: Task, wager: Number, deadline: Date)`
+  * `initializeBettor (user: User)`
+    * **requires**: The user doesn't already exist.
+    * **effects**: Creates a new user with `points` := 0 and `streak` := 0.
+  * `removeBettor (user: User)`
+    * **requires**: The user exists.
+    * **effects**: Removes the user and all the user bets.
+  * `placeBet (user: User, task: Task, wager: Number, deadline: Date): (bet: Bet)`
     * **requires**: The user has ≥ wager points.
     * **effects**: Creates a new Bet for the given task for the user. Deducts `wager` points from the user.
+  * `removeBet (bet: Bet)`
+    * **requires**: The bet exists.
+    * **effects**: Removes the bet from the set of bets.
   * `completeBet (user: User, task: Task, bet: Bet)`
     * **requires**: The task was started before bet`s deadline.
     * **effects**: Sets `success` := true for the bet. Adds `wager` × multiplier to the user's `points` and increases user's streak by one.
@@ -25,3 +34,9 @@
     * **effects**: Sets the bet's `sucess` := false. Resets the user's streak to 0.
   * `viewBetHistory (user: User): (bets: Bet[])`
     * **effects**: Returns a list of all bets for the user, ordered from most recent to least recent.
+  * `deleteUserBets (user: User)`
+    * **effects**: Removes all bets placed by the specified user.
+* **queries**:
+  * `getUsersBet (user: User, task: Task): (bet: Bet)`
+    * **requires**: The user must have a bet associated with the specified task.
+    * **effects**: Returns the user's bet associated with the specified task.
