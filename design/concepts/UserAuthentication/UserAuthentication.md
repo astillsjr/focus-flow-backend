@@ -12,21 +12,16 @@
 * **actions**:
   * `register (username: String, password: String, email: String): (user: User)`
     * **requires**: The username not already taken. 
-    * **effects**: Creates a new User with username and passwordHash := hash(password). Sets `isLoggedIn` := true. 
+    * **effects**: Creates a new user with the provided username and password. 
   * `login (username: String, password: String): (user: User)`
-    * **requires**: The user exists with matching username and hash(password) = passwordHash.
-    * **effects**: Sets the specified user's `isLoggedIn` = true.
+    * **requires**: The user exists with matching username and password.
+    * **effects**: Sets the user's status to logged in.
   * `logout (user: User)`
-    * **requires**: The user is logged in.
-    * **effects**: Sets the specified user's `isLoggedIn` = false.
-  * `resetPassword (user: User, newPassword: String)`
-    * **requires**: The user is logged in.
-    * **effects**: Updates the specified user's `passwordHash` := hash(newPassword).
-  * `deleteAccount (user: User)`
-    * **requires**: The user is logged in.
-    * **effects**: Removes the user from the set of all registered users.
-* **queries**:
-  * `isAuthenticated (user: User): (user: User)`
-    * **effects**: Returns whether the user is currently logged in.
-  * `getCurrentUser (): (user: User?)`
-    * **effects**: Returns the currently logged-in user, or null if none.
+    * **requires**: The user exists and is logged in.
+    * **effects**: Sets the user's status to logged out.
+  * `changePassword (user: User, oldPassword: string, newPassword: String)`
+    * **requires**: The user exists and is logged in. The old password matches the user's current password.
+    * **effects**: Updates the user's password to the new password.
+  * `deleteAccount (user: User, password: string)`
+    * **requires**: The user exists and is logged in. The password matches the user's.
+    * **effects**: Removes the user from the registry.

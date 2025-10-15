@@ -17,8 +17,8 @@
     * **requires**: The title is not empty. The `dueDate` has not already passed. 
     * **effects**: Creates a new task associated with user, and sets `completed` := false and `createdAt` := current time. 
   * `updateTask (user: User, task: Task, title?: String, description?: String, dueDate?: Date): (task: Task)`
-    * **requires**: The task belongs to user.
-    * **effects**: Updates the specified fields of the task.
+    * **requires**: The task exists and belongs to user.
+    * **effects**: Updates the fields of the task.
   * `markStarted (user: User, task: Task)`
     * **requires**: The task belongs to user. The task must have `startedAt` = null.
     * **effects**: Sets `startedAt` := current time for the task.
@@ -28,7 +28,8 @@
   * `deleteTask (user: User, task: Task)`
     * **requires**: The task belongs to the user.
     * **effects**: Removes the task from the user's task list.
-  * `viewTasks (user: User): (tasks: Task[])`
-    * **effects**: Returns a list of all tasks for the user.
   * `deleteUserTasks (user: User)`
     * **effects**: Removes alls tasks created by the specified user.
+* **queries**:
+  * `getUserTasks (user: User): (tasks: Task[])`
+    * **effects**: Returns a list of all tasks for the user.

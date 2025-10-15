@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "6a44b55ed8fd17df",
+        "id": "e477d55216a287be",
         "type": "tabs",
         "children": [
           {
-            "id": "c699114e716e646a",
+            "id": "6287efb0878d742c",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "design/learning/design-progression.md",
+                "file": "design/concepts/TaskManager/implementation.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "design-progression"
+              "title": "implementation"
             }
           }
         ]
@@ -169,43 +169,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "9b42b4503c7d88ad",
+  "active": "6287efb0878d742c",
   "lastOpenFiles": [
-    "design/concepts/Syncs/concept-syncs.md",
+    "design/concepts/UserAuthentication/implementation.md",
+    "design/concepts/TaskManager/implementation.md",
+    "design/concepts/TaskManager/TaskManager.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_210209.a849ff1f.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/response.600395a6.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_210145.1f47be01.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_210100.65f8e93b.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/response.f9899c1e.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_210024.77a8e33b.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/implement.78874745.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_205942.4f4a9cdb.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/response.55884d18.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_205904.eccd0031.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/response.6d76b65d.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/implement.47b7610b.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_205802.c0b66580.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/response.6fa7b662.md",
+    "context/design/concepts/TaskManager/implementation.md/20251014_205736.118672ca.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/prompt.845d12ad.md",
+    "context/design/concepts/TaskManager/implementation.md/steps/_.3eb68380.md",
+    "context/design/concepts/TaskManager/implementation.md/steps",
+    "context/design/concepts/TaskManager/implementation.md",
+    "context/design/concepts/TaskManager",
+    "context/design/concepts/UserAuthentication/implementation.md/20251014_163705.16b8e575.md",
+    "context/design/concepts/UserAuthentication/implementation.md/20251014_163738.3ac13938.md",
+    "design/background/detailed/concept-state.md",
+    "context/design/concepts/UserAuthentication/implementation.md/steps/response.f7e34050.md",
+    "context/design/concepts/UserAuthentication/implementation.md/steps/prompt.a07ae164.md",
+    "context/design/concepts/UserAuthentication/implementation.md/steps",
+    "context/design/concepts/UserAuthentication",
     "design/concepts/Syncs",
     "design/concepts/New folder",
-    "design/concepts/UserAuthentication/implementation.md",
-    "design/concepts/UserAuthentication/console-output.md",
-    "design/concepts/UserAuthentication/changelog.md",
-    "design/concepts/UserAuthentication/UserAuthentication.md",
     "design/concepts/UserAuthentication",
     "src/concepts/UserAuthentication/UserAuthenticationConcept.test.ts",
     "src/concepts/UserAuthentication/UserAuthenticationConcept.ts",
-    "src/concepts/UserAuthentication",
-    "src/concepts/UserAuthen",
-    "src/concepts/New folder",
-    "design/concepts/EmotionLogger/EmotionLogger.md",
-    "design/concepts/EmotionLogger/implementation.md",
-    "design/concepts/EmotionLogger/changelog.md",
-    "design/concepts/MicroBet/changelog.md",
-    "design/concepts/NudgeEngine/changelog.md",
-    "design/concepts/TaskManager/changelog.md",
-    "design/concepts/LikertSurvey/LikertSurvey.md",
-    "design/concepts/TaskManager/TaskManager.md",
-    "design/background/concept-specifications.md",
-    "design/concepts/LikertSurvey/testing.md",
-    "design/concepts/MicroBet/MicroBet.md",
-    "design/concepts/NudgeEngine/NudgeEngine.md",
-    "design/concepts/TaskManager/implementation.md",
-    "design/concepts/TaskManager/console-output.md",
-    "design/concepts/TaskManager/specification.md",
-    "src/concepts/TaskManager/TaskManagerConcept.test.ts",
-    "src/concepts/TaskManager/TaskManagerConcept.ts",
-    "design/learning/design-progression.md",
-    "design/concepts/EmotionLogger/console-output.md",
-    "design/concepts/EmotionLogger/specification.md",
-    "design/concepts/MicroBet/implementation.md",
-    "design/concepts/MicroBet/console-output.md",
-    "design/concepts/MicroBet/specification.md"
+    "src/concepts/UserAuthentication"
   ]
 }
