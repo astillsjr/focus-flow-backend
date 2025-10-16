@@ -11,13 +11,13 @@
     * a `triggered` of type `Boolean`
 * **actions**:
   * `scheduleNudge (user: User, task: Task, deliveryTime: DateTime)`
-    * **requires**: A nudge for this user-task pair does not already exist The deliveryTime has not already passed. 
-    * **effects**: Creates a new nudge for the user-task pair with the specified deliveryTime.
-  * `system nudgeUser (): (nudge: Nudge)`
-    * **requires**: The current time has exceeded the `deliveryTime` of a nudge.
-    * **effects**: Sends a nudge notification to user. Sets `triggered` := true.
+    * **requires**: AA nudge for this task does not already exist. The delivery time has not already passed.
+    * **effects**: Creates a new nudge for the task with the specified delivery time.
   * `cancelNudge (user: User, task: Task)`
-    * **requires**: A nudge must exist for the given user-task pair. The nudge must not have already been triggered.
-    * **effects**: Removes the nudge from the set of nudges.
+    * **requires**: The nudge must exist and not have already been triggered or canceled.
+    * **effects**: Marks the nudge as canceled.
   * `deleteUserNudges (user: User)`
-    * **effects**: Removes all nudges targeted at the specified user.  
+    * **effects**: Removes all nudges targeted at the specified user.
+  * `system nudgeUser (): (nudge: Nudge)`
+    * **requires**: The current time has exceeded the delivery time of a nudge.
+    * **effects**: Sends a notification to the user. Marks the nudge as triggered. 

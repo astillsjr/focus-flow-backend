@@ -78,7 +78,7 @@ export default class NudgeEngineConcept {
 
   /**
    * Cancel a nudge for a task.
-   * @requires The nudge must exist and not have already been triggered or cancelled.
+   * @requires The nudge must exist and not have already been triggered or canceled.
    * @effects Marks the nudge as canceled.
    */
   public async cancelNudge(
@@ -113,7 +113,7 @@ export default class NudgeEngineConcept {
   /**
    * Send a nudge to a user.
    * @requires The current time has exceeded the delivery time of a nudge.
-   * @effects Sends a notification to the user. Marks the nudges as triggered.
+   * @effects Sends a notification to the user. Marks the nudge as triggered.
    */
   public async nudgeUser(
     { user, task }: { user: User, task: Task },
