@@ -28,8 +28,8 @@ interface TaskDoc {
   description: string;
   createdAt: Date;
   startedAt?: Date;
+  completedAt?: Date;
   dueDate?: Date;
-  completed: boolean;
 }
 
 export default class TaskManagerConcept {
@@ -37,12 +37,19 @@ export default class TaskManagerConcept {
 
   constructor(private readonly db: Db) {
     this.tasks = this.db.collection(PREFIX + "tasks");
+
+    this.tasks.createIndex(
+      { user: 1, title: 1 }, 
+      { unique: true }
+    ).catch((err) => {
+      console.error("Failed to create unique index on TaskManager tasks:", err);
+    });
   }
 
   /**
    * Create a new task.
-   * @requires The title is not empty. The `dueDate` has not already passed.
-   * @effects Creates a new task with the provided information.
+   * @requires The title is unique and nonempty. The due date is after the current time.
+   * @effects Creates a new task for the user.
    */
   public async createTask(
     params: { 
@@ -58,6 +65,9 @@ export default class TaskManagerConcept {
       return { error: "Title cannot be empty" };
     }
 
+    const existingTask = await this.tasks.findOne({ user, title });
+    if (existingTask) return { error: "Title must be unique" };
+
     if (dueDate && dueDate.getTime() < Date.now()) {
       return { error: "Due date cannot be in the past" };
     }
@@ -70,7 +80,6 @@ export default class TaskManagerConcept {
       description,
       createdAt: new Date(),
       dueDate,
-      completed: false,
     };
     
     await this.tasks.insertOne(newTask)
@@ -79,7 +88,7 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Update the content of a task.
+   * Update the contents of a task.
    * @requires The task exists and belongs to user.
    * @effects Updates the fields of the task.
    */
@@ -94,8 +103,8 @@ export default class TaskManagerConcept {
   ): Promise<{ task: Task } | { error: string }> {
     const { user, task, title, description, dueDate } = params;
     
-    const existingTask = await this._getTaskForUser({ user, task });
-    if ('error' in existingTask) return existingTask;
+    const existingTask = await this.getTaskForUser({ user, task });
+    if ('error' in existingTask) return { error: existingTask.error };
   
     if (title !== undefined && !title.trim()) {
       return { error: "Title cannot be empty" };
@@ -134,16 +143,17 @@ export default class TaskManagerConcept {
 
   /**
    * Mark a task as started.
-   * @requires The task belongs to the user. The task has not already been started.
-   * @effects Marks the task as started at the current time.
+   * @requires The task belongs to the user. The task has not already been started. The start time of the task is prior to the current time.
+   * @effects Marks the task as started at the provided start time.
    */
   public async markStarted(
-    { user, task }: { user: User, task: Task },
+    { user, task, timeStarted }: { user: User, task: Task, timeStarted: Date },
   ): Promise<Empty | { error: string }> {
-    const existingTask = await this._getTaskForUser({ user, task });
-    if ('error' in existingTask) return existingTask;
+    const existingTask = await this.getTaskForUser({ user, task });
+    if ('error' in existingTask) return { error: existingTask.error };
 
-    if (existingTask.startedAt) return { error: "Task already started" };
+    if (existingTask.startedAt) return { error: "Task already marked started" };
+    if (timeStarted.getTime() > Date.now()) return { error: "Start time must have already passed" };
 
     await this.tasks.updateOne(
       { _id: existingTask._id },
@@ -155,50 +165,40 @@ export default class TaskManagerConcept {
   
   /**
    * Mark a task as completed.
-   * @requires The task belongs to user. The task has not already been completed.
-   * @effects Marks the task as complete.
+   * @requires The task belongs to the user. The task has not already been completed. The complete time of the task is prior to the current time.
+   * @effects Marks the task as completed at the provided completion time.
    */
   public async markComplete(
-    { user, task }: { user: User, task: Task },
+    { user, task, timeCompleted }: { user: User, task: Task, timeCompleted: Date },
   ): Promise<Empty | { error: string }> {
-    const existingTask = await this._getTaskForUser({ user, task });
-    if ('error' in existingTask) return existingTask;
+    const existingTask = await this.getTaskForUser({ user, task });
+    if ('error' in existingTask) return { error: existingTask.error };
 
-    if (existingTask.completed) return { error: "Task already complete" };
+    if (existingTask.completedAt) return { error: "Task already marked complete" };
+    if (timeCompleted.getTime() > Date.now()) return { error: "Completion time must already have passed" };
 
     await this.tasks.updateOne(
       { _id: existingTask._id },
-      { $set: { completed: true } }
+      { $set: { completedAt: timeCompleted } }
     );
 
     return {};
   }
 
   /**
-   * Delete a task
+   * Delete a task.
    * @requires The task belongs to the user.
    * @effects Removes the task from the user's tasks.
    */
   public async deleteTask (
     { user, task }: { user: User, task: Task },
   ): Promise<Empty | { error: string }> {
-    const existingTask = await this._getTaskForUser({ user, task });
-    if ('error' in existingTask) return existingTask;
+    const existingTask = await this.getTaskForUser({ user, task });
+    if ('error' in existingTask) return { error: existingTask.error };
 
     await this.tasks.deleteOne({ _id: existingTask._id });
 
     return {};
-  }
-
-  /**
-   * Fetches all tasks for a specific user.
-   */
-  public async getUserTasks(
-    { user }: { user: User },
-  ): Promise<TaskDoc[]> {
-    const userTasks = this.tasks.find({ user });
-
-    return await userTasks.toArray();
   }
 
   /**
@@ -214,9 +214,20 @@ export default class TaskManagerConcept {
   }
 
   /**
+   * Fetches all tasks for a specific user.
+   */
+  public async _getUserTasks(
+    { user }: { user: User },
+  ): Promise<TaskDoc[]> {
+    const userTasks = this.tasks.find({ user });
+
+    return await userTasks.toArray();
+  }
+
+  /**
    * Fetches a specifc task for a user or returns an error if not found.
    */
-  private async _getTaskForUser(
+  private async getTaskForUser(
     { user, task }: { user: User, task: Task },
   ): Promise<TaskDoc | { error: string }> {
     const existingTask = await this.tasks.findOne({ _id: task });

@@ -32,12 +32,19 @@ export default class UserAuthenticationConcept {
 
   constructor(private readonly db: Db) {
     this.users = this.db.collection(PREFIX + "users");
+
+    this.users.createIndex(
+      { username: 1 }, 
+      { unique: true }
+    ).catch((err) => {
+      console.error("Failed to create unique index on UserAuthentication users:", err);
+    });
   }
 
   /**
    * Register a new user account.
    * @requires The username not already taken.
-   * @effects Creates a new user with the provided username and password. Logs the user in after.
+   * @effects Creates a new user with the provided username and password and logs in.
    */
   public async register(
     { username, password, email }: { username: string; password: string; email: string  },
@@ -45,6 +52,8 @@ export default class UserAuthenticationConcept {
     const query = { username };
     const existingUser = await this.users.findOne(query);
     if (existingUser) return { error: "Username already taken" };
+
+    if (!this.isValidEmail(email)) return { error: "Invalid email format" };
 
     const newUserId = freshID();
     const hashedPassword = this.hashPassword(password);
@@ -63,7 +72,7 @@ export default class UserAuthenticationConcept {
 
   /**
    * Authenticate a user by verifying their credentials.
-   * @requires The user exists with matching username and password.
+   * @requires The user with matching username and password exists.
    * @effects Sets the user's status to logged in.
    */
   public async login(
@@ -123,8 +132,8 @@ export default class UserAuthenticationConcept {
 
   /**
    * Delete a user.
-   * @requires The user exists and is logged in. The password matches the user's.
-   * @effects Removes the user from the registry.
+   * @requires The user exists and is logged in. The provided password matches the user's current password.
+   * @effects Deletes the users account.
    */
   public async deleteAccount(
     { user, password }: { user: User, password: string },
@@ -157,5 +166,10 @@ export default class UserAuthenticationConcept {
 
   private verifyPassword(plainPassword: string, hashedPassword: string): boolean {
     return (this.hashPassword(plainPassword)) === hashedPassword;
+  }
+
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   }
 }

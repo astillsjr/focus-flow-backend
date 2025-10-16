@@ -6,15 +6,15 @@
 * **state**:
   * A set of `Users` with
     * a `username` of type `String`
-    * a `passwordHash` of type `String`
+    * a `hashedPassword` of type `String`
     * a `email` of type `String`
     * a `isLoggedIn` of type `Boolean`
 * **actions**:
   * `register (username: String, password: String, email: String): (user: User)`
     * **requires**: The username not already taken. 
-    * **effects**: Creates a new user with the provided username and password. 
+    * **effects**: Creates a new user with the provided username and password and logs in. 
   * `login (username: String, password: String): (user: User)`
-    * **requires**: The user exists with matching username and password.
+    * **requires**: The user with matching username and password exists.
     * **effects**: Sets the user's status to logged in.
   * `logout (user: User)`
     * **requires**: The user exists and is logged in.
@@ -23,5 +23,5 @@
     * **requires**: The user exists and is logged in. The old password matches the user's current password.
     * **effects**: Updates the user's password to the new password.
   * `deleteAccount (user: User, password: string)`
-    * **requires**: The user exists and is logged in. The password matches the user's.
-    * **effects**: Removes the user from the registry.
+    * **requires**: The user exists and is logged in. The provided password matches the user's current password.
+    * **effects**: Deletes the users account.
