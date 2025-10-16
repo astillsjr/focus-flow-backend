@@ -191,6 +191,17 @@ export default class TaskManagerConcept {
   }
 
   /**
+   * Fetches all tasks for a specific user.
+   */
+  public async getUserTasks(
+    { user }: { user: User },
+  ): Promise<TaskDoc[]> {
+    const userTasks = this.tasks.find({ user });
+
+    return await userTasks.toArray();
+  }
+
+  /**
    * Delete all tasks for a user.
    * @effects Removes all tasks created by the specified user. 
    */
@@ -200,17 +211,6 @@ export default class TaskManagerConcept {
     await this.tasks.deleteMany({ user });
 
     return {};
-  }
-
-  /**
-   * Fetches all tasks for a specific user.
-   */
-  public async getUserTasks(
-    { user }: { user: User },
-  ): Promise<TaskDoc[]> {
-    const userTasks = this.tasks.find({ user });
-
-    return await userTasks.toArray();
   }
 
   /**

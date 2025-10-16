@@ -7,13 +7,12 @@
   * A set of `Logs` with
     * a `user` of type `User`
     * a `task` of type `Task`
-    * a `phase` of type `String` ("before"|"after")
+    * a `phase` of type `Phase` ("before"|"after")
     * an `emotion` Enum(“dreading”, “anxious”, “neutral”, “motivated”, etc.)
 * **actions**:
-  * `logEmotion (user: User, task: Task, phase: String, emotion: Emotion): (log: Log)`
-    * **requires**: `phase` in {“before”, “after”}
-    * **effects**: Adds new log entry for the user-task pair for that phase.
-  * `deleteTaskLog (user: User, task: Task)`
+  * `logEmotion (user: User, task: Task, phase: Phase, emotion: Emotion): (log: Log)`
+    * **effects**: Adds a new log entry for the user-task pair for that phase.
+  * `deleteTaskLogs (user: User, task: Task)`
     * **requires**: The log for the user-task pair exists.
     * **effects**: Removes the log from the users logs.
   * `viewEmotionTrends (user: User): (trends: Data)`

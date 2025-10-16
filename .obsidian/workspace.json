@@ -171,6 +171,7 @@
   },
   "active": "6287efb0878d742c",
   "lastOpenFiles": [
+    "src/utils/emotions.ts",
     "design/concepts/UserAuthentication/implementation.md",
     "design/concepts/TaskManager/implementation.md",
     "design/concepts/TaskManager/TaskManager.md",
@@ -198,7 +199,6 @@
     "context/design/concepts/UserAuthentication/implementation.md/20251014_163738.3ac13938.md",
     "design/background/detailed/concept-state.md",
     "context/design/concepts/UserAuthentication/implementation.md/steps/response.f7e34050.md",
-    "context/design/concepts/UserAuthentication/implementation.md/steps/prompt.a07ae164.md",
     "context/design/concepts/UserAuthentication/implementation.md/steps",
     "context/design/concepts/UserAuthentication",
     "design/concepts/Syncs",
