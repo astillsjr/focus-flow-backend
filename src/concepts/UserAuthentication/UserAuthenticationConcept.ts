@@ -43,7 +43,7 @@ export default class UserAuthenticationConcept {
 
   /**
    * Register a new user account.
-   * @requires The username not already taken.
+   * @requires The username not already taken. The email is in a valid email form.
    * @effects Creates a new user with the provided username and password and logs in.
    */
   public async register(

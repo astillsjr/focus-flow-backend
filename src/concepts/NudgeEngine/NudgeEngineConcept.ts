@@ -60,7 +60,7 @@ export default class NudgeEngineConcept {
       _id: newNudgeId,
       user,
       task,
-      deliveryTime,
+      deliveryTime: new Date(deliveryTime),
       triggered: false,
       canceled: false,
     };
@@ -118,22 +118,34 @@ export default class NudgeEngineConcept {
   public async nudgeUser(
     { user, task }: { user: User, task: Task },
   ): Promise<{ message: string} | { error: string }> {
+    const now = new Date();
+
+    // Atomically find and update if all preconditions are met
+    const result = await this.nudges.findOneAndUpdate(
+      {
+        user,
+        task,
+        triggered: false,
+        canceled: false,
+        deliveryTime: { $lte: now },
+      },
+      { $set: { triggered: true } },
+      { returnDocument: "after" },
+    );
+    
+    if (result) return { message: "Nudge triggered — notification system not yet implemented." };
+
+    // Fetch the doc again to determine the specific error reason
     const existingNudge = await this.nudges.findOne({ user, task });
+
     if (!existingNudge) return { error: "Nudge does not exist for this task" };
 
-    if (existingNudge.triggered) {
-      return { error: "Nudge has already been triggered" };
-    }
+    if (existingNudge.triggered) return { error: "Nudge has already been triggered" };
 
-    if (existingNudge.deliveryTime.getTime() > Date.now()) {
-      return { error: "Nudge delivery time has not arrived yet" };
-    }
+    if (existingNudge.canceled) return { error: "Nudge has been canceled" };
 
-    await this.nudges.updateOne(
-      { _id: existingNudge._id },
-      { $set: { triggered: true } }
-    );
+    if (existingNudge.deliveryTime.getTime() > now.getTime()) return { error: "Nudge delivery time has not arrived yet" };
 
-    return { message: "Nudge triggered — notification system not yet implemented." };
+    return { error: "Unknown error triggering nudge" };
   }
 }

@@ -11,7 +11,7 @@
     * a `isLoggedIn` of type `Boolean`
 * **actions**:
   * `register (username: String, password: String, email: String): (user: User)`
-    * **requires**: The username not already taken. 
+    * **requires**: The username not already taken. The email is in a valid email form.
     * **effects**: Creates a new user with the provided username and password and logs in. 
   * `login (username: String, password: String): (user: User)`
     * **requires**: The user with matching username and password exists.
