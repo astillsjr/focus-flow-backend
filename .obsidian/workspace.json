@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "e477d55216a287be",
+        "id": "7393269802b83852",
         "type": "tabs",
         "children": [
           {
-            "id": "6287efb0878d742c",
+            "id": "ee3255651b052fde",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "design/concepts/TaskManager/implementation.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "implementation"
+              "title": "New tab"
             }
           }
         ]
@@ -169,11 +165,16 @@
       "bases:Create new base": false
     }
   },
-  "active": "6287efb0878d742c",
+  "active": "ee3255651b052fde",
   "lastOpenFiles": [
+    "design/concepts/EmotionLogger/testing.md",
+    "design/concepts/MicroBet/testing.md",
+    "design/concepts/NudgeEngine/testing.md",
+    "design/concepts/TaskManager/testing.md",
+    "design/concepts/UserAuthentication/testing.md",
+    "design/concepts/TaskManager/implementation.md",
     "src/utils/emotions.ts",
     "design/concepts/UserAuthentication/implementation.md",
-    "design/concepts/TaskManager/implementation.md",
     "design/concepts/TaskManager/TaskManager.md",
     "context/design/concepts/TaskManager/implementation.md/20251014_210209.a849ff1f.md",
     "context/design/concepts/TaskManager/implementation.md/steps/response.600395a6.md",
@@ -195,17 +196,12 @@
     "context/design/concepts/TaskManager/implementation.md/steps",
     "context/design/concepts/TaskManager/implementation.md",
     "context/design/concepts/TaskManager",
-    "context/design/concepts/UserAuthentication/implementation.md/20251014_163705.16b8e575.md",
-    "context/design/concepts/UserAuthentication/implementation.md/20251014_163738.3ac13938.md",
-    "design/background/detailed/concept-state.md",
-    "context/design/concepts/UserAuthentication/implementation.md/steps/response.f7e34050.md",
     "context/design/concepts/UserAuthentication/implementation.md/steps",
     "context/design/concepts/UserAuthentication",
     "design/concepts/Syncs",
     "design/concepts/New folder",
     "design/concepts/UserAuthentication",
     "src/concepts/UserAuthentication/UserAuthenticationConcept.test.ts",
-    "src/concepts/UserAuthentication/UserAuthenticationConcept.ts",
-    "src/concepts/UserAuthentication"
+    "src/concepts/UserAuthentication/UserAuthenticationConcept.ts"
   ]
 }
