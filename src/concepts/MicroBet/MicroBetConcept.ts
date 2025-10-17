@@ -53,9 +53,9 @@ export default class MicroBetConcept {
   /**
    * Add a user to the betting system.
    * @requires The user is not already present.
-   * @effects Creates a new user with no points and a streak of zero.
+   * @effects Creates a new betting profile for user with no points and a streak of zero.
    */
-  public async initializeBetter(
+  public async initializeBettor(
     { user }: { user: User },
   ): Promise<Empty | { error: string }> {
     const existingUser = await this.users.findOne({ _id: user });
@@ -86,9 +86,9 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Place a bet.
-   * @requires The user exists. A bet does not already exist for this task. The user has ≥ wager points. The deadline has not already passed.
-   * @effects Creates a new bet for the given task assigned to the given user. Deducts `wager` points from the user.
+   * Generate a bet.
+   * @requires The user has a betting profile. A bet does not already exist for this task. The user has more than `wager` points. The deadline for the bet is after the current time.
+   * @effects Creates a new bet for the task. Deducts `wager` points from the user.
    */
   public async placeBet(
     params: {
@@ -101,13 +101,12 @@ export default class MicroBetConcept {
     const { user, task, wager, deadline } = params;
 
     const existingUser = await this.users.findOne({ _id: user });
-    if (!existingUser) return { error: "User does not exist" };
+    if (!existingUser) return { error: "User does not have a betting profile" };
 
     const existingBet = await this.bets.findOne({ user, task });
     if (existingBet) return { error: "Bet for this task already exists" };
 
     if (existingUser.points < wager) return { error: "User does not have enough points to make this wager" };
-    
     if (deadline.getTime() < Date.now()) return { error: "Due date cannot be in the past" };
 
     const newBetId = freshID();
@@ -132,14 +131,14 @@ export default class MicroBetConcept {
 
   /**
    * Cancel a bet.
-   * @requires The user exists. The bet for the user-task pair exists.
+   * @requires The user has a betting profile. The bet exists for the task and belongs to the user.
    * @effects Removes the bet. If the bet has not already been resolved then refunds the user their wager.
    */
   public async cancelBet(
     { user, task }: { user: User, task: Task }
   ): Promise<Empty | { error: string }> {
     const existingUser = await this.users.findOne({ _id: user });
-    if (!existingUser) return { error: "User does not exist" };
+    if (!existingUser) return { error: "User does not have a betting profile" };
 
     const existingBet = await this.bets.findOne({ user, task });
     if (!existingBet) return { error: "Bet for this task does not exist" };
@@ -157,15 +156,15 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Resolve a potentially successful bet.
-   * @requires The user exists. The bet for the user-task pair exists.
-   * @effects If the bet has not already been resolved, marks the bet as a success, awards the user additional points, and increases the user's streak by 1.
+   * Attempt to resolve a bet.
+   * @requires The user has a betting profile. The bet exists for the task and belongs to the user.
+   * @effects If the bet has not already been resolved, marks the bet as a success, awards the user additional points, and increases the user's streak by 1. Otherwise indicates the bet is already resolved.
    */
   public async resolveBet(
     { user, task, completionTime }: { user: User, task: Task, completionTime: Date },
   ): Promise<{ status: "already_resolved" } | { status: "success", reward: number } | { error: string }> {
     const existingUser = await this.users.findOne({ _id: user });
-    if (!existingUser) return { error: "User does not exist" };
+    if (!existingUser) return { error: "User does not have a betting profile" };
 
     const existingBet = await this.bets.findOne({ user, task });
     if (!existingBet) return { error: "Bet for this task does not exist" };
@@ -197,14 +196,14 @@ export default class MicroBetConcept {
 
   /**
    * Resolve an expired bet.
-   * @requires The user exists. The bet for the user-task pair exists. The bet's deadline has already passed.
-   * @effects If the bet has not already been resolved, marks the bet as a failure and resets the user's streak.
+   * @requires The user has a betting profile. The bet exists for the task and belongs to the user. The bet's deadline has already passed.
+   * @effects If the bet has not already been resolved, marks the bet as a failure and resets the user's streak. Otherwise indicates the bet is already resolved.
    */
-  private async resolveExpiredBet (
+  public async resolveExpiredBet (
     { user, task }: { user: User, task: Task }
   ): Promise<Empty| { status: "already_resolved" } | { error: string }> {
     const existingUser = await this.users.findOne({ _id: user });
-    if (!existingUser) return { error: "User does not exist" };
+    if (!existingUser) return { error: "User does not have a betting profile" };
 
     const existingBet = await this.bets.findOne({ user, task });
     if (!existingBet) return { error: "Bet for this task does not exist" };
@@ -230,7 +229,7 @@ export default class MicroBetConcept {
   * Automatically resolve all expired unresolved bets.
   * @effects Marks bets as failed if their deadline has passed and they are unresolved.
   */
-  public async resolveAllExpiredBets(): Promise<{ resolved: number }> {
+  private async resolveAllExpiredBets(): Promise<{ resolved: number }> {
     const now = new Date();
 
     const expiredBets = await this.bets.find({
@@ -253,14 +252,14 @@ export default class MicroBetConcept {
 
   /**
    * View the user's bet history.
-   * @requires The user exists.
-   * @effects Returns a list of all bets for the user, ordered from most recent to least recent.
+   * @requires The user has a betting profile.
+   * @effects Returns a list of all bets for the user, ordered from most recent to least recent and filtered by status if provided.
    */
   public async viewBetHistory(
     { user, status }: { user: User, status?: "pending" | "success" | "failure" },
   ): Promise<BetDoc[] | { error: string }> {
     const existingUser = await this.users.findOne({ _id: user });
-    if (!existingUser) return { error: "User does not exist" };
+    if (!existingUser) return { error: "User does not have a betting profile" };
 
     const filter: Record<string, unknown> = { user };
 
