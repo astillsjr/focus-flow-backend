@@ -19,7 +19,7 @@ export type Phase = "before" | "after";
  *   a user User
  *   a task Task
  *   a phase String
- *   a emotion Enum
+ *   a emotion Emotion
  */
 interface LogDoc {
   _id: Log;
@@ -44,6 +44,11 @@ export default class EmotionLoggerConcept {
     });
   }
 
+  /**
+   * Create a log for a specified phase.
+   * @requires A log does not already exist for the task in the given phase.
+   * @effects Adds a new log entry for the task in that phase.
+   */
   private async logPhase(
     user: User,
     task: Task,
@@ -112,11 +117,11 @@ export default class EmotionLoggerConcept {
    */
   public async viewEmotionTrends(
     { user }: { user: User },
-  ): Promise<{ message: string } | { error: string }> {
+  ): Promise<{ trends: string } | { error: string }> {
     const userLogs = await this.logs.find({ user }).toArray();
     if (userLogs.length === 0) return { error: "No logs for this user" };
 
-    return { message: "Trend analysis not implemented yet" };
+    return { trends: "Trend analysis not implemented yet" };
   }
 
   /**
