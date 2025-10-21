@@ -1,7 +1,9 @@
 {
     "imports": {
         "@concepts/": "./src/concepts/",
-        "@utils/": "./src/utils/"
+        "@utils/": "./src/utils/",
+        "bcryptjs": "npm:bcryptjs@^3.0.2",
+        "jsonwebtoken": "npm:jsonwebtoken@^9.0.2"
     },
     "tasks": {
         "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api"

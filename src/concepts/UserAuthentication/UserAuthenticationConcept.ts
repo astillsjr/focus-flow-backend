@@ -1,6 +1,13 @@
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
+import bcrypt from "npm:bcryptjs";
+import jwt from "npm:jsonwebtoken";
+
+const JWT_SECRET = Deno.env.get("JWT_SECRET") ?? "your-dev-secret";
+
+const ACCESS_TOKEN_EXPIRES_IN = "15m"; 
+const REFRESH_TOKEN_EXPIRES_IN = "7d"; 
 
 // Collection prefix to ensure namespace separation
 const PREFIX = "UserAuthentication" + ".";
@@ -13,14 +20,15 @@ type User = ID;
  *   a username String
  *   a passwordHash String
  *   a email String
- *   a isLoggedIn Boolean
+ *   a createdAt Date
  */
 interface UserDoc {
   _id: User;
   username: string;
   hashedPassword: string;
   email: string;
-  isLoggedIn: boolean;
+  createdAt: Date;
+  refreshToken?: string;
 }
 
 /**
@@ -33,141 +41,202 @@ export default class UserAuthenticationConcept {
   constructor(private readonly db: Db) {
     this.users = this.db.collection(PREFIX + "users");
 
-    this.users.createIndex(
-      { username: 1 }, 
-      { unique: true }
-    ).catch((err) => {
-      console.error("Failed to create unique index on UserAuthentication users:", err);
-    });
+    this.users.createIndex({ username: 1 }, { unique: true }).catch(err =>
+      console.error("Failed to create username index:", err)
+    );
+
+    this.users.createIndex({ email: 1 }, { unique: true }). catch(err =>
+      console.error("Failed to create email index:", err)
+    );
   }
 
   /**
-   * Register a new user account.
-   * @requires The username not already taken. The email is in a valid email form.
-   * @effects Creates a new user with the provided username and password and logs in.
+   * Register a new user.
+   * @requires The email and username are not already in use. The email is in a valid email form.
+   * @effects Creates a new user with the provided username and password and returns the user's session tokens. 
    */
   public async register(
     { username, password, email }: { username: string; password: string; email: string  },
-  ): Promise<{ user: User } | { error: string }> {
-    const query = { username };
-    const existingUser = await this.users.findOne(query);
-    if (existingUser) return { error: "Username already taken" };
+  ): Promise<{ accessToken: string, refreshToken: string } | { error: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingUser = await this.users.findOne({ $or: [{ username }, { email: normalizedEmail }] });
+    if (existingUser) return { error: "Username or email already in use" };
 
-    if (!this.isValidEmail(email)) return { error: "Invalid email format" };
+    if (!this.isValidEmail(normalizedEmail)) return { error: "Invalid email format" };
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     const newUserId = freshID();
-    const hashedPassword = this.hashPassword(password);
+    
     const newUser: UserDoc = {
       _id: newUserId,
       username,
       hashedPassword,
       email,
-      isLoggedIn: true,
+      createdAt: new Date(),
     }
 
     await this.users.insertOne(newUser);
 
-    return { user: newUserId };
+    const accessToken = this.generateToken(newUserId, ACCESS_TOKEN_EXPIRES_IN);
+    const refreshToken = this.generateToken(newUserId, REFRESH_TOKEN_EXPIRES_IN);
+
+    await this.users.updateOne({ _id: newUserId }, { $set: { refreshToken } });
+
+    return { accessToken, refreshToken };
   }
 
   /**
-   * Authenticate a user by verifying their credentials.
+   * Log in a user.
    * @requires The user with matching username and password exists.
-   * @effects Sets the user's status to logged in.
+   * @effects Returns the user's session tokens.
    */
   public async login(
     { username, password }: { username: string; password: string; }, 
-  ): Promise<{ user: User } | { error: string }> {
-    const query = { username };
-    const existingUser = await this.users.findOne(query);
-    if (!existingUser) return { error: "Invalid username or password" };
+  ): Promise<{ accessToken: string, refreshToken: string } | { error: string }> {
+    const user = await this.users.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.hashedPassword))) {
+      return { error:"Invalid username or password" };
+    }
 
-    if (!this.verifyPassword(password, existingUser.hashedPassword)) return { error: "Invalid username or password" };
+    const accessToken = this.generateToken(user._id, ACCESS_TOKEN_EXPIRES_IN);
+    const refreshToken = this.generateToken(user._id, REFRESH_TOKEN_EXPIRES_IN);
 
-    await this.users.updateOne(
-      { _id: existingUser._id },
-      { $set: { isLoggedIn: true } }
-    );
+    await this.users.updateOne({ _id: user._id }, { $set: { refreshToken } });
 
-    return { user: existingUser._id };
+    return { accessToken, refreshToken };
   }
 
   /**
-   * Terminate a user's session.
-   * @requires The user exists and is logged in.
-   * @effects Sets the user's status to logged out.
+   * Log out a user.
+   * @requires The refresh token is valid.
+   * @effects Invalidates the users refresh token.
    */
   public async logout(
-    { user }: { user: User },
+    refreshToken: string
   ): Promise<Empty | { error: string }> {
-    const authenticatedUser = await this.isAuthenticated({ user });
-    if (!authenticatedUser) return { error: "User must be logged in" };
+    const userId = this.verifyToken(refreshToken);
+    if (!userId) return { error: "Invalid or expired refresh token" };
+
+    const user = await this.users.findOne({ _id: userId });
+    if (!user || user.refreshToken !== refreshToken) {
+      return { error: "Invalid refresh token" };
+    }
 
     await this.users.updateOne(
-      { _id: authenticatedUser._id },
-      { $set: { isLoggedIn: false } }
+      { _id: userId },
+      { $unset: { refreshToken: "" } }
     );
+
     return {};
   }
 
   /**
    * Change a user's password. 
-   * @requires The user exists and is logged in. The old password matches the user's current password.
+   * @requires The access token is valid. The old password matches the user's current password.
    * @effects Updates the user's password to the new password.
    */
   public async changePassword(
-    { user, oldPassword, newPassword }: { user: User, oldPassword: string, newPassword: string },
+    { accessToken, oldPassword, newPassword }: { accessToken: string, oldPassword: string, newPassword: string },
   ): Promise<Empty | { error: string }> {
-    const authenticatedUser = await this.isAuthenticated({ user });
-    if (!authenticatedUser) return { error: "User must be logged in" };
+    const userId = this.verifyToken(accessToken);
+    if (!userId) return { error: "Invalid or expired token" };
     
-    if (!this.verifyPassword(oldPassword, authenticatedUser.hashedPassword)) return { error: "Incorrect previous password" };
+    const user = await this.users.findOne({ _id: userId });
+    if (!user || !(await bcrypt.compare(oldPassword, user.hashedPassword))) {
+      return { error: "Incorrect current password" };
+    }
 
-    await this.users.updateOne(
-      { _id: authenticatedUser._id },
-      { $set: { hashedPassword: this.hashPassword(newPassword) } }
-    );
+    const newHashed = await bcrypt.hash(newPassword, 10);
+    await this.users.updateOne({ _id: user._id }, { $set: { hashedPassword: newHashed } });
+
     return {}
   }
 
   /**
-   * Delete a user.
-   * @requires The user exists and is logged in. The provided password matches the user's current password.
-   * @effects Deletes the users account.
+   * Delete a user's account.
+   * @requires The access token is valid. The provided password matches the user's current password.
+   * @effects Deletes the user's account.
    */
   public async deleteAccount(
-    { user, password }: { user: User, password: string },
+    { accessToken, password }: { accessToken: string, password: string },
   ): Promise<Empty | { error: string }> {
-    const authenticatedUser = await this.isAuthenticated({ user });
-    if (!authenticatedUser) return { error: "User must be logged in" };
+    const userId = this.verifyToken(accessToken);
+    if (!userId) return { error: "Invalid or expired token" };
 
-    if (!this.verifyPassword(password, authenticatedUser.hashedPassword)) return { error: "Incorrect password" };
+    const user = await this.users.findOne({ _id: userId });
+    if (!user || !(await bcrypt.compare(password, user.hashedPassword))) {
+      return { error: "Incorrect password" };
+    }
 
-    await this.users.deleteOne({ _id: authenticatedUser._id });
+    await this.users.deleteOne({ _id: user._id });
     return {};
   }
 
   /**
-   * Check if a user is logged in.
-   * @effects Returns the user if they are logged in or null if they are not.
+   * Refresh a user's access token.
+   * @requires The refresh token is valid.
+   * @effects Generates a new access token for the user.
    */
-  private async isAuthenticated(
-    { user }: { user: User }
-  ): Promise<UserDoc | null> {
-    const authenticatedUser = await this.users.findOne({ _id: user });
-    if (!authenticatedUser || !authenticatedUser.isLoggedIn) return null;
+  public async refreshAccessToken(
+    refreshToken: string
+  ): Promise<{ accessToken: string } | { error: string }> {
+    const userId = this.verifyToken(refreshToken);
+    if (!userId) return { error: "Invalid or expired refresh token" };
 
-    return authenticatedUser;
+    const user = await this.users.findOne({ _id: userId });
+    if (!user || user.refreshToken !== refreshToken) {
+      return { error: "Invalid refresh token" };
+    }
+
+    const newAccessToken = this.generateToken(userId, ACCESS_TOKEN_EXPIRES_IN);
+    return { accessToken: newAccessToken };
   }
 
-  private hashPassword(password: string): string {
-    return `hashed:${password}_salt123`;
+  /**
+   * Feteches the users info.
+   * @requires The access token is valid.
+   * @effects Returns the users id, username, and email.
+   */
+  public async _getUserInfo(
+    accessToken: string
+  ): Promise<{ user: { id: User; username: string; email: string } } | { error: string }> {
+    const userId = this.verifyToken(accessToken);
+    if (!userId) return { error: "Invalid or expired token" };
+
+    const user = await this.users.findOne({ _id: userId });
+    if (!user) return { error: "User not found" };
+
+    return {
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+      },
+    };
   }
 
-  private verifyPassword(plainPassword: string, hashedPassword: string): boolean {
-    return (this.hashPassword(plainPassword)) === hashedPassword;
+  /**
+   * Generate JWT token
+   */
+  private generateToken(userId: User, expiresIn: string): string {
+    return jwt.sign({ userId }, JWT_SECRET, { expiresIn });
   }
 
+  /**
+   * Verify JWT token
+   */
+  private verifyToken(token: string): User | null {
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as { userId: User };
+      return payload.userId;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Validate email format.
+   */
   private isValidEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);

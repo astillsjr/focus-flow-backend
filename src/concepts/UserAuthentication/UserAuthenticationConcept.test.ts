@@ -1,176 +1,217 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import UserAuthenticationConcept from "./UserAuthenticationConcept.ts";
 import { ID } from "@utils/types.ts";
 
-/**
- * UserAuthentication Concept Tests
- *
- * Covers:
- * - Operational principle (register → logout → login)
- * - Interesting scenarios (invalid email, duplicates, wrong passwords, etc.)
- */
+
+
 Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", async (t) => {
   const [db, client] = await testDb();
   const auth = new UserAuthenticationConcept(db);
 
-  // ---------------------------
-  // OPERATIONAL PRINCIPLE TEST
-  // ---------------------------
-  await t.step("Operational Principle: register → logout → login", async () => {
-    console.log("\n--- Operational Principle Sequence ---");
-
-    // 1. Register new user
-    const regResult = await auth.register({
+  await t.step("Principle: User registers, changes password, logs out, relogs in, and deletes their account", async () => {
+    // 1. Register a new user
+    const registration = await auth.register({
       username: "alice",
-      password: "p@ssword1",
+      password: "securePass1!",
       email: "alice@example.com",
     });
-    console.log("Action: register →", regResult);
-    assertExists(regResult);
-    assertEquals("error" in regResult, false);
+    assertNotEquals(
+      "error" in registration,
+      true,
+      "User registration should not fail.",
+    );
+    const { accessToken, refreshToken } = registration as { accessToken: string, refreshToken: string };
 
-    const { user } = regResult as { user: ID };
-    const createdUser = await auth.users.findOne({ _id: user });
-    assertExists(createdUser);
-    assertEquals(createdUser.isLoggedIn, true);
-
-    // 2. Logout user
-    const logoutResult = await auth.logout({ user });
-    console.log("Action: logout →", logoutResult);
-    assertEquals("error" in logoutResult, false);
-
-    const afterLogout = await auth.users.findOne({ _id: user });
-    assertEquals(afterLogout?.isLoggedIn, false);
-
-    // 3. Login user again
-    const loginResult = await auth.login({
-      username: "alice",
-      password: "p@ssword1",
+    // 2. Change password
+    const change = await auth.changePassword({
+      accessToken: accessToken,
+      oldPassword: "securePass1!",
+      newPassword: "newSecure123",
     });
-    console.log("Action: login →", loginResult);
-    assertExists(loginResult);
-    assertEquals("error" in loginResult, false);
+    assertNotEquals(
+      "error" in change,
+      true,
+      "Password change should not fail.",
+    );
 
-    const afterLogin = await auth.users.findOne({ _id: user });
-    assertEquals(afterLogin?.isLoggedIn, true);
+    // 3. Log Out
+    const logout = await auth.logout(refreshToken);
+    assertNotEquals(
+      "error" in logout,
+      true,
+      "Logout should not fail.",
+    );
+
+    // 3. Log in with new password
+    const relog = await auth.login({
+      username: "alice",
+      password: "newSecure123",
+    });
+    assertNotEquals(
+      "error" in relog,
+      true,
+      "Logging in with new password should succeed.",
+    );
+    const { accessToken: accessToken2 } = relog as { accessToken: string };
+    
+    // 4. Delete account
+    const deletion = await auth.deleteAccount({
+      accessToken: accessToken2,
+      password: "newSecure123",
+    });
+    assertNotEquals(
+      "error" in deletion,
+      true,
+      "Account deletion should succeed.",
+    );
+
+    const userInDb = await auth.users.findOne({ username: "alice" });
+    assertEquals(userInDb, null);
   });
 
-  // ---------------------------
-  // INTERESTING SCENARIOS
-  // ---------------------------
-
-  await t.step("Scenario 1: Prevent duplicate usernames", async () => {
-    console.log("\n--- Scenario 1: Duplicate Registration ---");
+  await t.step("Action: register requires unique email and username", async () => {
     await auth.register({
       username: "bob",
-      password: "12345",
+      password: "test123",
       email: "bob@example.com",
     });
 
-    const dup = await auth.register({
+    const dupUsername = await auth.register({
       username: "bob",
-      password: "different",
+      password: "another",
       email: "bob2@example.com",
     });
 
-    console.log("Action: duplicate register →", dup);
-    assertEquals("error" in dup, true);
-    assertEquals((dup as { error: string }).error, "Username already taken");
+    const dupEmail = await auth.register({
+      username: "bob2",
+      password: "another",
+      email: "bob@example.com",
+    });
+
+    assertEquals(
+      "error" in dupUsername, 
+      true, 
+      "Should fail when registering with a duplicate username."
+    );
+    assertEquals(
+      "error" in dupEmail, 
+      true,
+      "Should fail when registering with a duplicate email."
+    );
   });
 
-  await t.step("Scenario 2: Invalid email format", async () => {
-    console.log("\n--- Scenario 2: Invalid Email ---");
+  await t.step("Action: register requires valid email format", async () => {
     const badEmail = await auth.register({
       username: "charlie",
       password: "test",
       email: "not-an-email",
     });
 
-    console.log("Action: register (invalid email) →", badEmail);
-    assertEquals("error" in badEmail, true);
+    assertEquals(
+      "error" in badEmail, 
+      true,
+      "Should fail when registering with invalid email format."
+    );
     assertEquals((badEmail as { error: string }).error, "Invalid email format");
   });
 
-  await t.step("Scenario 3: Invalid login credentials", async () => {
-    console.log("\n--- Scenario 3: Invalid Login ---");
+  await t.step("Action: login requires valid login credentials", async () => {
     const loginFail = await auth.login({
       username: "unknownUser",
       password: "wrongpass",
     });
 
-    console.log("Action: login (invalid creds) →", loginFail);
-    assertEquals("error" in loginFail, true);
     assertEquals(
-      (loginFail as { error: string }).error,
-      "Invalid username or password",
+      "error" in loginFail,
+      true,
+      "Should fail when logging in with invalid credentials."
+    );
+    assertEquals((loginFail as { error: string }).error, "Invalid username or password");
+  });
+
+  await t.step("Action: logout clears refresh token", async () => {
+    const { refreshToken } = await auth.register({
+      username: "logan",
+      password: "logout123!",
+      email: "logan@example.com",
+    }) as { refreshToken: string };
+
+    const logout = await auth.logout(refreshToken);
+    assertEquals(
+      "error" in logout, 
+      false,
+      "Logout should succeed."
+    );
+
+    const refreshAttempt = await auth.refreshAccessToken(refreshToken);
+    assertEquals(
+      "error" in refreshAttempt, 
+      true, 
+      "Should fail after logout"
     );
   });
 
-  await t.step("Scenario 4: Change password (success + failure cases)", async () => {
-    console.log("\n--- Scenario 4: Change Password ---");
-
-    // Create a user for this test
-    const result = await auth.register({
+  await t.step("Action: password change requires authentication and a correct old password", async () => {
+    const { accessToken } = await auth.register({
       username: "diana",
-      password: "oldpass",
+      password: "mypassword",
       email: "diana@example.com",
-    });
-    assertExists(result);
-    const { user } = result as { user: ID };
+    }) as { accessToken: string };
 
-    // Successful password change
-    const change = await auth.changePassword({
-      user,
-      oldPassword: "oldpass",
+    // Wrong old password
+    const wrongPassChange = await auth.changePassword({
+      accessToken: accessToken,
+      oldPassword: "wrong",
       newPassword: "newpass",
     });
-    console.log("Action: changePassword (success) →", change);
-    assertEquals("error" in change, false);
 
-    // Verify user can log in with new password
-    await auth.logout({ user });
-    const relog = await auth.login({
-      username: "diana",
-      password: "newpass",
-    });
-    console.log("Action: login after password change →", relog);
-    assertEquals("error" in relog, false);
-
-    // Failure: attempt change while logged out
-    await auth.logout({ user });
-    const failChange = await auth.changePassword({
-      user,
-      oldPassword: "newpass",
-      newPassword: "shouldFail",
-    });
-    console.log("Action: changePassword (logged out) →", failChange);
-    assertEquals("error" in failChange, true);
     assertEquals(
-      (failChange as { error: string }).error,
-      "User must be logged in",
+      "error" in wrongPassChange, 
+      true,
+      "Should fail when providing the wrong old password during password change."
+    );
+    assertEquals((wrongPassChange as { error: string }).error, "Incorrect current password");
+
+    // Expired/invalid token
+    const badTokenChange = await auth.changePassword({
+      accessToken: "invalid.jwt.token",
+      oldPassword: "mypassword",
+      newPassword: "newpass",
+    });
+
+    assertEquals(
+      "error" in badTokenChange, 
+      true,
+      "Should fail when attempting password change while not logged in."
     );
   });
 
-  await t.step("Scenario 5: Delete account (success + verification)", async () => {
-    console.log("\n--- Scenario 5: Delete Account ---");
-
-    // Register and delete user
-    const res = await auth.register({
-      username: "edward",
-      password: "secret",
-      email: "edward@example.com",
+  await t.step("Query: user info requires authentication", async () => {
+    const registration = await auth.register({
+      username: "alice",
+      password: "securePass1!",
+      email: "alice@example.com",
     });
-    const { user } = res as { user: ID };
+    assertNotEquals(
+      "error" in registration,
+      true,
+      "User registration should not fail.",
+    );
+    const { accessToken, refreshToken: _refreshToken } = registration as { accessToken: string, refreshToken: string };
 
-    const deletion = await auth.deleteAccount({ user, password: "secret" });
-    console.log("Action: deleteAccount →", deletion);
-    assertEquals("error" in deletion, false);
+    const info = await auth._getUserInfo(accessToken);
+    if (!("user" in info)) throw new Error(`getUserInfo failed: ${info.error}`);
+    assertEquals(info.user.username, "alice");
 
-    const deletedUser = await auth.users.findOne({ _id: user });
-    assertEquals(deletedUser, null);
+    const result = await auth._getUserInfo("bad.token.value");
+    assertEquals(
+      "error" in result, 
+      true,
+      "Should fail when querying without authentication."
+    );
   });
 
-  // Clean up DB connection
+  // Clean up test DB
   await client.close();
 });
