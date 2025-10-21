@@ -35,3 +35,10 @@
   * `viewBetHistory (user: User): (bets: Bet[])`
     * **requires**: The user has a betting profile.
     * **effects**: Returns a list of all bets for the user, ordered from most recent to least recent.
+  * `_getUserStats (user: User): (points: Number, streak: Number)`
+    * **requires**: The user has a betting profile.
+  * `_getBetForTask (user: User): (points: Number, streak: Number)`
+    * **requires**: The user has a betting profile.
+  * `_getActiveBets (user: User): (points: Number, streak: Number)`
+    * **requires**: The user has a betting profile.
+  

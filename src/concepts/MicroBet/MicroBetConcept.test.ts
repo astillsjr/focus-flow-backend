@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import MicroBetConcept from "./MicroBetConcept.ts";
 import { ID } from "@utils/types.ts";
@@ -9,16 +9,14 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
   const user = "user:Alice" as ID;
   const task = "task:Essay" as ID;
 
-  // ---------------------------
-  // OPERATIONAL PRINCIPLE TEST
-  // ---------------------------
-  await t.step("Operational Principle: initialize → placeBet → resolveBet → viewHistory", async () => {
-    console.log("\n--- Operational Principle Sequence ---");
-
+  await t.step("Principle: User initializes, places bet, resolves bet, views stats, views their history", async () => {
     // 1. Initialize betting profile
     const init = await bets.initializeBettor({ user });
-    console.log("Action: initializeBettor →", init);
-    assertEquals("error" in init, false);
+    assertNotEquals(
+      "error" in init,
+      true,
+      "Bettor initialization should not fail.",
+    );
 
     // Give user some points manually for testing wagers
     await bets.users.updateOne({ _id: user }, { $set: { points: 100 } });
@@ -31,17 +29,28 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       wager: 20,
       deadline,
     });
-    console.log("Action: placeBet →", place);
-    assertEquals("error" in place, false);
+    assertNotEquals(
+      "error" in place,
+      true,
+      "Bet placement should not fail.",
+    );
 
     const { bet } = place as { bet: ID };
     const placedBet = await bets.bets.findOne({ _id: bet });
     assertExists(placedBet);
-    assertEquals(placedBet.wager, 20);
+    assertEquals(
+      placedBet.wager, 
+      20,
+      "Incorrect stroage of bet wager."
+    );
 
     // Check points deducted
     const afterPlace = await bets.users.findOne({ _id: user });
-    assertEquals(afterPlace?.points, 80);
+    assertEquals(
+      afterPlace?.points, 
+      80,
+      "Incorrect deduction of points from user after bet."
+    );
 
     // 3. Resolve bet successfully (before deadline)
     const res = await bets.resolveBet({
@@ -49,53 +58,81 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       task,
       completionTime: new Date(Date.now() + 5000),
     });
-    console.log("Action: resolveBet →", res);
-    assertEquals("error" in res, false);
+    assertNotEquals(
+      "error" in res,
+      true,
+      "Bet resolution should succeed.",
+    );
     assertEquals((res as { status: string }).status, "success");
 
     const afterResolve = await bets.users.findOne({ _id: user });
-    assertEquals(afterResolve?.streak, 1);
-    assertEquals(afterResolve?.points! > 80, true);
+    assertEquals(
+      afterResolve?.streak, 
+      1,
+      "Incorrect streak increment after successful bet."
+    );
+    assertEquals(
+      afterResolve?.points! > 80, 
+      true,
+      "Incorrect user reward after successful bet."
+    );
 
-    // 4. View history
+    // 4. View stats
+    const stats = await bets._getUserStats({ user });
+    assertNotEquals(
+      "error" in place,
+      true,
+      "Stat fetch should not fail.",
+    );
+    assertEquals(
+      (stats as { points: number, streak: number}).points, 
+      101,
+      "Incorrect user stats fetch."
+    );
+    assertEquals(
+      (stats as { points: number, streak: number}).streak, 
+      1,
+      "Incorrect user stats fetch."
+    );
+
+    // 5. View history
     const history = await bets.viewBetHistory({ user });
-    console.log("Action: viewBetHistory →", history);
     assertEquals(Array.isArray(history), true);
     assertEquals((history as any[]).length >= 1, true);
   });
 
-  // ---------------------------
-  // INTERESTING SCENARIOS
-  // ---------------------------
-
-  await t.step("Scenario 1: Prevent duplicate bettor and missing profile usage", async () => {
-    console.log("\n--- Scenario 1: Profile Validation ---");
-
+  await t.step("Action: initializng bettors prohibits duplicate users", async () => {
     const duplicate = await bets.initializeBettor({ user });
-    console.log("Action: initializeBettor duplicate →", duplicate);
-    assertEquals("error" in duplicate, true);
+    assertEquals(
+      "error" in duplicate, 
+      true,
+      "Initializng a duplicate user should fail."
+    );
     assertEquals(
       (duplicate as { error: string }).error,
-      "This user is already a part of the system",
+      "User already initialized",
     );
+  });
 
+  await t.step("Action: bet placing prohibits uninitialized users", async () => {
     const missingUserResult = await bets.placeBet({
       user: "user:Ghost" as ID,
       task: "task:Fail" as ID,
       wager: 10,
       deadline: new Date(Date.now() + 10000),
     });
-    console.log("Action: placeBet without profile →", missingUserResult);
-    assertEquals("error" in missingUserResult, true);
+    assertEquals(
+      "error" in missingUserResult, 
+      true,
+      "Placing a bet with uninitialized user should fail."
+    );
     assertEquals(
       (missingUserResult as { error: string }).error,
-      "User does not have a betting profile",
+      "User profile not found",
     );
   });
 
-  await t.step("Scenario 2: Prevent duplicate bets and invalid deadlines", async () => {
-    console.log("\n--- Scenario 2: Duplicate Bets & Past Deadlines ---");
-
+  await t.step("Action: bet placing prohibts duplicate bets and invalid deadlines", async () => {
     const task2 = "task:Duplicate" as ID;
     await bets.users.updateOne({ _id: user }, { $set: { points: 200 } });
 
@@ -105,7 +142,11 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       wager: 10,
       deadline: new Date(Date.now() + 5000),
     });
-    assertEquals("error" in first, false);
+    assertEquals(
+      "error" in first, 
+      false,
+      "Bet placement should succeed."
+    );
 
     const duplicate = await bets.placeBet({
       user,
@@ -113,8 +154,11 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       wager: 10,
       deadline: new Date(Date.now() + 10_000),
     });
-    console.log("Action: placeBet duplicate →", duplicate);
-    assertEquals("error" in duplicate, true);
+    assertEquals(
+      "error" in duplicate, 
+      true,
+      "Placing a duplicate bet should fail."
+    );
     assertEquals(
       (duplicate as { error: string }).error,
       "Bet for this task already exists",
@@ -126,17 +170,18 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       wager: 5,
       deadline: new Date(Date.now() - 10_000),
     });
-    console.log("Action: placeBet past deadline →", past);
-    assertEquals("error" in past, true);
+    assertEquals(
+      "error" in past,
+      true,
+      "Placing a bet with an elasped due date should fail."
+    );
     assertEquals(
       (past as { error: string }).error,
-      "Due date cannot be in the past",
+      "Deadline must be in the future",
     );
   });
 
-  await t.step("Scenario 3: Cancel bet (refund logic)", async () => {
-    console.log("\n--- Scenario 3: Cancel Bet ---");
-
+  await t.step("Action: canceling a bet before its deadline refunds points", async () => {
     const task3 = "task:Cancel" as ID;
     await bets.users.updateOne({ _id: user }, { $set: { points: 50 } });
 
@@ -146,23 +191,36 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       wager: 10,
       deadline: new Date(Date.now() + 30_000),
     });
-    assertEquals("error" in placed, false);
+    assertEquals(
+      "error" in placed, 
+      false,
+      "Bet placement should succeed."
+    );
 
     const beforeCancel = await bets.users.findOne({ _id: user });
     const cancel = await bets.cancelBet({ user, task: task3 });
-    console.log("Action: cancelBet →", cancel);
-    assertEquals("error" in cancel, false);
+    assertEquals(
+      "error" in cancel, 
+      false,
+      "Bet cancelation should succeed."
+    );
 
     const afterCancel = await bets.users.findOne({ _id: user });
-    assertEquals(afterCancel!.points, beforeCancel!.points + 10);
+    assertEquals(
+      afterCancel!.points, 
+      beforeCancel!.points + 10,
+      "Canceling a bet before its deadline should refund wager."
+    );
 
     const deletedBet = await bets.bets.findOne({ user, task: task3 });
-    assertEquals(deletedBet, null);
+    assertEquals(
+      deletedBet, 
+      null,
+      "A canceled bet should be removed from the state."
+    );
   });
 
-  await t.step("Scenario 4: Resolve expired bets (failure & streak reset)", async () => {
-    console.log("\n--- Scenario 4: Resolve Expired Bet ---");
-
+  await t.step("Action: resolving expired bets reset user streak", async () => {
     const task4 = "task:Expired" as ID;
     await bets.users.updateOne({ _id: user }, { $set: { streak: 3, points: 100 } });
 
@@ -172,8 +230,11 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
       wager: 10,
       deadline: new Date(Date.now() - 2000), // expired
     });
-    console.log("Action: placeBet expired (should fail) →", newBet);
-    assertEquals("error" in newBet, true); // cannot place past-due
+    assertEquals(
+      "error" in newBet, 
+      true,
+      "Placing an expired bet should fail."
+    ); 
 
     // Force-insert a bet to simulate past-due unresolved bet
     const forcedBetId = "forced:expired" as ID;
@@ -187,16 +248,21 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     });
 
     const resFail = await bets.resolveExpiredBet({ user, task: task4 });
-    console.log("Action: resolveExpiredBet →", resFail);
-    assertEquals("error" in resFail, false);
+    assertEquals(
+      "error" in resFail, 
+      false,
+      "Expired bet resolution should succeed."
+    );
 
     const afterFailUser = await bets.users.findOne({ _id: user });
-    assertEquals(afterFailUser?.streak, 0);
+    assertEquals(
+      afterFailUser?.streak, 
+      0,
+      "Streak should reset after expired bet resolution."
+    );
   });
 
-  await t.step("Scenario 5: Remove bettor and verify cleanup", async () => {
-    console.log("\n--- Scenario 5: Remove Bettor ---");
-
+  await t.step("Action: bettor removal removes all user bets", async () => {
     await bets.users.updateOne({ _id: user }, { $set: { points: 30 } });
 
     // Create a few bets for cleanup
@@ -210,16 +276,31 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     }
 
     const beforeRemove = await bets.bets.find({ user }).toArray();
-    assertEquals(beforeRemove.length >= 1, true);
+    assertEquals(
+      beforeRemove.length >= 1, 
+      true,
+      "Bettor should have a least one bet."
+    );
 
     const removal = await bets.removeBettor({ user });
-    console.log("Action: removeBettor →", removal);
-    assertEquals("error" in removal, false);
+    assertEquals(
+      "error" in removal, 
+      false,
+      "Bettor removal should succeed."
+    );
 
     const userAfterRemove = await bets.users.findOne({ _id: user });
     const betsAfterRemove = await bets.bets.find({ user }).toArray();
-    assertEquals(userAfterRemove, null);
-    assertEquals(betsAfterRemove.length, 0);
+    assertEquals(
+      userAfterRemove, 
+      null,
+      "User should not be queriable after removal."
+    );
+    assertEquals(
+      betsAfterRemove.length, 
+      0,
+      "User should have no bets after removal."
+    );
   });
 
   await client.close();
