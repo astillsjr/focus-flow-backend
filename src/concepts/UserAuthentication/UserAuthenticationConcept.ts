@@ -4,7 +4,10 @@ import { freshID } from "@utils/database.ts";
 import bcrypt from "npm:bcryptjs";
 import jwt from "npm:jsonwebtoken";
 
-const JWT_SECRET = Deno.env.get("JWT_SECRET") ?? "your-dev-secret";
+const JWT_SECRET = Deno.env.get("JWT_SECRET");
+if (!JWT_SECRET) {
+  throw new Error("GEMINI_API_KEY is not set in the environment");
+}
 
 const ACCESS_TOKEN_EXPIRES_IN = "15m"; 
 const REFRESH_TOKEN_EXPIRES_IN = "7d"; 

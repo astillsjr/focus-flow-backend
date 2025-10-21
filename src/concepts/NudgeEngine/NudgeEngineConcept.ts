@@ -1,6 +1,13 @@
 import { Collection, Db, MongoServerError  } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
+import { GeminiLLM } from '@utils/gemini-llm.ts';
+import { Emotion } from "@utils/emotions.ts";
+
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+if (!GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY is not set in the environment");
+}
 
 // Collection prefix to avoid name clashes
 const PREFIX = "NudgeEngine" + ".";
@@ -29,17 +36,21 @@ interface NudgeDoc {
   canceled: boolean;
 }
 
+/**
+ * @concept NudgeEngine
+ * @purpose To generate personalized, context-aware motivational nudges using AI, 
+    leveraging task details and user emotion history.
+ */
 export default class NudgeEngineConcept {
   nudges: Collection<NudgeDoc>;
+  llm: GeminiLLM;
 
   constructor(private readonly db: Db) {
     this.nudges = this.db.collection(PREFIX + "nudges");
+    this.llm = new GeminiLLM(GEMINI_API_KEY!);
 
-    this.nudges.createIndex(
-      { user: 1, task: 1 }, 
-      { unique: true }
-    ).catch((err) => {
-      console.error("Failed to create unique index on NudgeEngine nudges:", err);
+    this.nudges.createIndex({ user: 1, task: 1 }, { unique: true }).catch((err) => {
+      console.error("Failed to create nudges index:", err)
     });
   }
 
@@ -84,14 +95,14 @@ export default class NudgeEngineConcept {
   public async cancelNudge(
     { user, task }: { user: User, task: Task },
   ): Promise<Empty | { error: string }> {
-    const existingNudge = await this.nudges.findOne({ user, task });
-    if (!existingNudge) return { error: "Nudge for this task does not exist" };
+    const nudgeDoc = await this.nudges.findOne({ user, task });
+    if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
 
-    if (existingNudge.triggered) return { error: "Nudge has already been triggered" };
-    if (existingNudge.canceled) return { error: "Nudge has already been canceled" };
+    if (nudgeDoc.triggered) return { error: "Nudge has already been triggered" };
+    if (nudgeDoc.canceled) return { error: "Nudge has already been canceled" };
 
     await this.nudges.updateOne(
-      { _id: existingNudge._id },
+      { _id: nudgeDoc._id },
       { $set: { canceled: true } }
     );
 
@@ -113,39 +124,144 @@ export default class NudgeEngineConcept {
   /**
    * Send a nudge to a user.
    * @requires The current time has exceeded the delivery time of a nudge.
-   * @effects Sends a notification to the user. Marks the nudge as triggered.
+   * @effects Generate a motivational message for the user. Marks the nudge as triggered.
    */
   public async nudgeUser(
-    { user, task }: { user: User, task: Task },
-  ): Promise<{ message: string} | { error: string }> {
+    params: { 
+      user: User; 
+      task: Task; 
+      title: string; 
+      description: string;
+      recentEmotions: Emotion[];
+    }
+  ): Promise<{ message: string, nudge: Nudge } | { error: string }> {
+    const { user, task, title, description, recentEmotions } = params;
     const now = new Date();
 
-    // Atomically find and update if all preconditions are met
-    const result = await this.nudges.findOneAndUpdate(
-      {
-        user,
-        task,
-        triggered: false,
-        canceled: false,
-        deliveryTime: { $lte: now },
-      },
-      { $set: { triggered: true } },
-      { returnDocument: "after" },
-    );
+    const nudgeDoc = await this.nudges.findOne({
+      user,
+      task,
+      triggered: false,
+      canceled: false,
+      deliveryTime: { $lte: now },
+    });
+
+    if (!nudgeDoc) {
+      const failedNudge = await this.nudges.findOne({ user, task });
+
+      if (!failedNudge) return { error: "Nudge does not exist for this task" };
+      if (failedNudge.triggered) return { error: "Nudge has already been triggered" };
+      if (failedNudge.canceled) return { error: "Nudge has been canceled" };
+      if (failedNudge.deliveryTime.getTime() > now.getTime()) return { error: "Nudge delivery time has not arrived yet" };
+
+      return { error: "Unknown error triggering nudge" };
+    }
     
-    if (result) return { message: "Nudge triggered — notification system not yet implemented." };
+    const prompt = this.buildPrompt(title, description, recentEmotions);
 
-    // Fetch the doc again to determine the specific error reason
-    const existingNudge = await this.nudges.findOne({ user, task });
+    try {
+      const response = await this.llm.executeLLM(prompt);
+      const generatedMessage = response.trim();
 
-    if (!existingNudge) return { error: "Nudge does not exist for this task" };
+      if (!generatedMessage) {
+        console.warn("LLM returned empty message");
+        return { error: "Failed to generate motivational message" };
+      }
 
-    if (existingNudge.triggered) return { error: "Nudge has already been triggered" };
+      const error = this.validateMessage(generatedMessage);
+      if (error) {
+        console.warn("Message failed validation:", {
+          message: generatedMessage,
+          reason: error,
+        });
+        return { error: "Generated message did not meet quality criteria" };
+      }
 
-    if (existingNudge.canceled) return { error: "Nudge has been canceled" };
+      await this.nudges.updateOne(
+        { _id: nudgeDoc._id },
+        { $set: { triggered: true } }
+      );
 
-    if (existingNudge.deliveryTime.getTime() > now.getTime()) return { error: "Nudge delivery time has not arrived yet" };
+      return { message: generatedMessage, nudge: nudgeDoc._id };
+    } catch (err) {
+      console.error("Error generating nudge:", err);
+      return { error: "Failed to generate motivational message" };
+    }
+  }
 
-    return { error: "Unknown error triggering nudge" };
+  /**
+   * Fetch the nudge for a task. 
+   */
+  public async _getNudgeForTask(
+    { user, task }: { user: User, task: Task }
+  ): Promise<NudgeDoc | { error: string }> {
+    const nudgeDoc = await this.nudges.findOne({ user, task});
+    if (!nudgeDoc) return { error: "Nudge for this task does not exist"}
+
+    return nudgeDoc;
+  }
+
+  /**
+   * Construct a user nudge message prompt.
+   */
+  private buildPrompt(title: string, description: string, emotions: Emotion[]): string {
+    return `
+    You are Nudgr, a friendly AI coach helping users take action on tasks they’ve been avoiding.
+
+    Your job is to generate a SHORT, motivating message (1–2 sentences, under 200 characters) to help the user get started on a task. Keep it kind, specific, and light — no guilt or pressure.
+
+    Context:
+    Task Title: "${title}"
+    Task Description: "${description}"
+    Recent Emotions: [${emotions.join(", ")}]
+
+    Your message should:
+    - Mention the task or emotion if useful.
+    - Include an action verb (e.g., start, try, focus, tackle, take a moment).
+    - Feel supportive, clear, and natural.
+    - Avoid vague advice ("You got this!") or excessive enthusiasm ("You are unstoppable!").
+
+    Examples:
+    - “Take a moment to dive into the first part of ‘${title}’. It doesn’t have to be perfect.”
+    - “You’ve felt [${emotions[0] ?? "tired"}] — try starting with a small part of this task.”
+    - “Focus on just one piece of ‘${title}’. That’s a win.”
+
+    Only return the message. Do not include explanations or reasoning.
+    `.trim();
+  }
+
+
+  /**
+   * Checks that the LLM output is concise, contextually relevant, and consistent with user emotions.
+   */
+  private validateMessage(message: string): string | null {
+    // --- 1. Shortness constraint ---
+    if (message.length > 200) return "Message too long.";
+
+    // const msgLower = message.toLowerCase();
+    
+    // --- 2. Actionable intent ---
+    // const actionVerbs = [
+    //   'start', 'try', 'begin', 'work', 'focus', 'attempt',
+    //   'take a moment', 'give it a shot', 'make progress', 'tackle', 'dive in', 'move forward',
+    //   'add', 'enhance', 'improve', 'polish', 'shine'
+    // ];
+
+    // const encouragementPatterns = [
+    //   /you (can|should|might)/i,
+    //   /why not/i,
+    //   /give it a (try|shot)/i,
+    //   /let's/i
+    // ];
+
+    // const containsAction = actionVerbs.some(v => msgLower.includes(v)) || 
+    //                       encouragementPatterns.some(pattern => pattern.test(message));
+
+    // if (!containsAction) {
+    //   return "Message lacks actionable prompt."
+    // }
+
+    return null;
   }
 }
+

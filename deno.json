@@ -1,6 +1,7 @@
 {
     "imports": {
         "@concepts/": "./src/concepts/",
+        "@google/generative-ai": "npm:@google/generative-ai@^0.24.1",
         "@utils/": "./src/utils/",
         "bcryptjs": "npm:bcryptjs@^3.0.2",
         "jsonwebtoken": "npm:jsonwebtoken@^9.0.2"

@@ -2,7 +2,7 @@
 
 * **concept**: NudgeEngine \[User, Task]
 * **purpose**: To encourage users to begin tasks through timely, low-pressure prompts.
-* **principle**: If a user schedules or receives a nudge for a task, then at the appointed time (or context trigger), the app reminds them to start small, making initiation easier and more frequent.
+* **principle**: If a user schedules a task, then a nudge is generated for the task. When a nudge is prompted to be sent, the AI model analyzes the user’s current mood trends and the nature of the task to generate a motivational message.
 * **state**:
   * A set of `Nudges` with
     * a `user` of type `User`
@@ -20,4 +20,6 @@
     * **effects**: Removes all nudges targeted at the specified user.
   * `system nudgeUser (): (nudge: Nudge)`
     * **requires**: The current time has exceeded the delivery time of a nudge.
-    * **effects**: Sends a notification to the user. Marks the nudge as triggered. 
+    * **effects**: Generate a motivational message for the user. Marks the nudge as triggered. 
+
+  Add query for getting the nudge based on user and task so you can check when a user marks a task as started if the nudge needs to be canceled. _getNudgeForTask()...

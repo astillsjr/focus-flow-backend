@@ -33,6 +33,10 @@ interface TaskDoc {
   dueDate?: Date;
 }
 
+/**
+ * @concept TaskManager
+ * @purpose To create, organize, and update the tasks intended to be complete.
+ */
 export default class TaskManagerConcept {
   tasks: Collection<TaskDoc>;
 
@@ -43,10 +47,9 @@ export default class TaskManagerConcept {
       console.error("Failed to create task index:", err)
     });
 
-    this.tasks.createIndex(
-      { title: "text" },
-      { name: "TextSearchIndex" }
-    ).catch(err => console.error("Failed to create text index:", err));
+    this.tasks.createIndex({ title: "text" },{ name: "TextSearchIndex" }).catch(err => { 
+      console.error("Failed to create text index:", err)
+    });
   }
 
   /**
