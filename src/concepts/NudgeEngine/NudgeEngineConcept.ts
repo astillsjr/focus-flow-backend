@@ -123,7 +123,7 @@ export default class NudgeEngineConcept {
 
   /**
    * Send a nudge to a user.
-   * @requires The current time has exceeded the delivery time of a nudge.
+   * @requires The current time has exceeded the delivery time of a nudge. The nudge has not been canceled or already triggered.
    * @effects Generate a motivational message for the user. Marks the nudge as triggered.
    */
   public async nudgeUser(
