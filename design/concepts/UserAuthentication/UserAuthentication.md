@@ -29,3 +29,6 @@
   * `refreshAccessToken (refreshToken: string, password: string)`
     * **requires**: The refresh token is valid. The provided password matches the user's current password.
     * **effects**: Generates a new access token for the user.
+  * `_getUserInfo (refreshToken: string, password: string)`
+    * **requires**: The access token is valid.
+    * **effects**: Returns the users username, id, and email.

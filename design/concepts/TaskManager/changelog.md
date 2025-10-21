@@ -7,3 +7,7 @@ In comparison to Assignment 2, this new iteration of the concept spec removes fr
 ### Implementation Specification Refactoring
 
 As I was implementing this concept, action requirements and effects where constantly being refined. I realized that task titles should be unique so I added requirements for that. I also realized it may make more sense for a timestamp to be provided when marking a task as started or complete (to prevent discrepencies from concurrency). This led to me to replacing the completed boolean with a completedAt date. 
+
+### Robustness Imrpovements
+
+I added addition queries for UI and implemented filtering, sorting, and title search for the user's tasks query. 

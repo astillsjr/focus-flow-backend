@@ -195,7 +195,7 @@ export default class UserAuthenticationConcept {
   /**
    * Feteches the users info.
    * @requires The access token is valid.
-   * @effects Returns the users id, username, and email.
+   * @effects Returns the users username, id, and email.
    */
   public async _getUserInfo(
     accessToken: string
