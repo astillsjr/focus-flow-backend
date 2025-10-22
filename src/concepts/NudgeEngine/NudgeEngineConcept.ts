@@ -55,9 +55,10 @@ export default class NudgeEngineConcept {
   }
 
   /**
-   * Schedule a nudge for a task.
-   * @requires A nudge for this task does not already exist. The delivery time has not already passed.
-   * @effects Creates a new nudge for the task with the specified delivery time.
+   * Schedules a new nudge for a task.
+   * @requires No existing nudge must exist for the same task. 
+   *           The delivery time must be in the future.
+   * @effects Creates a new nudge record associated with the task and user.
    */
   public async scheduleNudge(
     { user, task, deliveryTime }: { user: User, task: Task, deliveryTime: Date },
@@ -66,9 +67,8 @@ export default class NudgeEngineConcept {
       return { error: "Delivery time cannot be in the past" };
     }
     
-    const newNudgeId = freshID();
     const newNudge: NudgeDoc = {
-      _id: newNudgeId,
+      _id: freshID(),
       user,
       task,
       deliveryTime: new Date(deliveryTime),
@@ -78,7 +78,7 @@ export default class NudgeEngineConcept {
 
     try {
       await this.nudges.insertOne(newNudge);
-      return { nudge: newNudgeId };
+      return { nudge: newNudge._id };
     } catch (err) {
       if (err instanceof MongoServerError && err.code === 11000) {
         return { error: "Nudge already exists for this task" };
@@ -88,9 +88,9 @@ export default class NudgeEngineConcept {
   }
 
   /**
-   * Cancel a nudge for a task.
-   * @requires The nudge must exist and not have already been triggered or canceled.
-   * @effects Marks the nudge as canceled.
+   * Cancels a scheduled nudge.
+   * @requires The nudge must exist and must not already be triggered or canceled.
+   * @effects Marks the nudge as canceled, preventing future delivery.
    */
   public async cancelNudge(
     { user, task }: { user: User, task: Task },
@@ -110,8 +110,8 @@ export default class NudgeEngineConcept {
   }
 
   /**
-   * Remove all nudges for a user.
-   * @effects Removes all nudges targeted at the specified user. 
+   * Deletes all nudges associated with a user.
+   * @effects Removes every nudge targeted at the specified user.
    */
   public async deleteUserNudges(
     { user }: { user: User},
@@ -122,9 +122,10 @@ export default class NudgeEngineConcept {
   }
 
   /**
-   * Send a nudge to a user.
-   * @requires The current time has exceeded the delivery time of a nudge. The nudge has not been canceled or already triggered.
-   * @effects Generate a motivational message for the user. Marks the nudge as triggered.
+   * Sends a motivational nudge to a user.
+   * @requires The current time must be later than the nudge's delivery time.
+   *           The nudge must not already be triggered or canceled.
+   * @effects Generates a motivational message using the AI model and marks the nudge as triggered.
    */
   public async nudgeUser(
     params: { 
@@ -190,19 +191,74 @@ export default class NudgeEngineConcept {
   }
 
   /**
-   * Fetch the nudge for a task. 
+   * Retrieves a specific nudge for a given task.
+   * @requires A nudge must exist for the specified user and task.
+   * @effects Returns the matching nudge document.
    */
-  public async _getNudgeForTask(
+  public async getNudge(
     { user, task }: { user: User, task: Task }
   ): Promise<NudgeDoc | { error: string }> {
-    const nudgeDoc = await this.nudges.findOne({ user, task});
-    if (!nudgeDoc) return { error: "Nudge for this task does not exist"}
+    const nudgeDoc = await this.nudges.findOne({ user, task });
+    if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
 
     return nudgeDoc;
   }
 
   /**
-   * Construct a user nudge message prompt.
+   * Retrieves all nudges for a user with optional filtering.
+   * @effects Returns the user's nudges filtered by status (pending, triggered, or canceled).
+   */
+  public async getUserNudges(
+    { 
+      user, 
+      status, 
+      limit = 50 
+    }: { 
+      user: User; 
+      status?: "pending" | "triggered" | "canceled";
+      limit?: number;
+    }
+  ): Promise<NudgeDoc[]> {
+    const filter: Record<string, unknown> = { user };
+
+    if (status === "pending") {
+      filter.triggered = false;
+      filter.canceled = false;
+    } else if (status === "triggered") {
+      filter.triggered = true;
+    } else if (status === "canceled") {
+      filter.canceled = true;
+    }
+
+    return await this.nudges
+      .find(filter)
+      .sort({ deliveryTime: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  /**
+   * Retrieves all ready-to-deliver nudges for a user.
+   * @effects Returns nudges whose delivery time has arrived and are not yet triggered or canceled.
+   */
+  public async getReadyNudges(
+    { user }: { user: User }
+  ): Promise<NudgeDoc[]> {
+    const now = new Date();
+    return await this.nudges
+      .find({
+        user,
+        triggered: false,
+        canceled: false,
+        deliveryTime: { $lte: now }
+      })
+      .sort({ deliveryTime: 1 })
+      .toArray();
+  }
+
+  /**
+   * Constructs the AI prompt used to generate a motivational nudge message.
+   * @effects Returns a formatted prompt containing task context and recent user emotions.
    */
   private buildPrompt(title: string, description: string, emotions: Emotion[]): string {
     return `
@@ -232,7 +288,8 @@ export default class NudgeEngineConcept {
 
 
   /**
-   * Checks that the LLM output is concise, contextually relevant, and consistent with user emotions.
+   * Validates the generated motivational message for brevity and relevance.
+   * @effects Returns `null` if valid, or an error string if validation fails.
    */
   private validateMessage(message: string): string | null {
     // --- 1. Shortness constraint ---

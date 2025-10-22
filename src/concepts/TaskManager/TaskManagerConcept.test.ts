@@ -74,9 +74,9 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
     assertExists(afterComplete.completedAt);
 
     // 5. Query for all tasks
-    const all = await tasks._getUserTasks({ user });
+    const all = await tasks.getTasks({ user });
     assertEquals(
-      all.length >= 1,
+      all.total >= 1,
       true,
       "Task query should return at least one task."
     );
@@ -210,11 +210,11 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
       title: "Status test",
       description: "Validate the task's status",
     }) as { task: ID };
-    let exampleTask = await tasks._getTaskById({ user, task: example.task});
+    let exampleTask = await tasks.getTask({ user, task: example.task});
     if ("error" in exampleTask) throw new Error("Query for existing task should succeed.");
 
     assertEquals(
-      tasks._getTaskStatus(exampleTask), 
+      tasks.getTaskStatus(exampleTask), 
       "pending",
       "Correct query for pending task status should succeed." 
     )
@@ -224,10 +224,10 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
       task: example.task,
       timeStarted: new Date(Date.now() - 100),
     });
-    exampleTask = await tasks._getTaskById({ user, task: example.task});
+    exampleTask = await tasks.getTask({ user, task: example.task});
     if ("error" in exampleTask) throw new Error("Query for existing task should succeed.");
     assertEquals(
-      tasks._getTaskStatus(exampleTask), 
+      tasks.getTaskStatus(exampleTask), 
       "in-progress",
       "Correct query for in-progress task status should succeed." 
     )
@@ -237,10 +237,10 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
       task: example.task,
       timeCompleted: new Date(Date.now() - 100),
     });
-    exampleTask = await tasks._getTaskById({ user, task: example.task});
+    exampleTask = await tasks.getTask({ user, task: example.task});
     if ("error" in exampleTask) throw new Error("Query for existing task should succeed.");
     assertEquals(
-      tasks._getTaskStatus(exampleTask), 
+      tasks.getTaskStatus(exampleTask), 
       "completed",
       "Correct query for completed task status should succeed." 
     )

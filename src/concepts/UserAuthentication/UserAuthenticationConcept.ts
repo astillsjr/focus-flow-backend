@@ -6,7 +6,7 @@ import jwt from "npm:jsonwebtoken";
 
 const JWT_SECRET = Deno.env.get("JWT_SECRET");
 if (!JWT_SECRET) {
-  throw new Error("GEMINI_API_KEY is not set in the environment");
+  throw new Error("JWT_SECRET is not set in the environment");
 }
 
 const ACCESS_TOKEN_EXPIRES_IN = "15m"; 
@@ -48,15 +48,16 @@ export default class UserAuthenticationConcept {
       console.error("Failed to create username index:", err)
     );
 
-    this.users.createIndex({ email: 1 }, { unique: true }). catch(err =>
+    this.users.createIndex({ email: 1 }, { unique: true }).catch(err =>
       console.error("Failed to create email index:", err)
     );
   }
 
   /**
    * Register a new user.
-   * @requires The email and username are not already in use. The email is in a valid email form.
-   * @effects Creates a new user with the provided username and password and returns the user's session tokens. 
+   * @requires The provided email and username must not already exist. 
+   *           The email must be in valid format.
+   * @effects Creates a new user record with a hashed password and returns a new pair of session tokens. 
    */
   public async register(
     { username, password, email }: { username: string; password: string; email: string  },
@@ -88,17 +89,18 @@ export default class UserAuthenticationConcept {
     return { accessToken, refreshToken };
   }
 
+
   /**
-   * Log in a user.
-   * @requires The user with matching username and password exists.
-   * @effects Returns the user's session tokens.
+   * Logs in an existing user.
+   * @requires The provided username and password must match an existing user account.
+   * @effects Returns a new pair of access and refresh tokens for the authenticated user.
    */
   public async login(
     { username, password }: { username: string; password: string; }, 
   ): Promise<{ accessToken: string, refreshToken: string } | { error: string }> {
     const user = await this.users.findOne({ username });
     if (!user || !(await bcrypt.compare(password, user.hashedPassword))) {
-      return { error:"Invalid username or password" };
+      return { error: "Invalid username or password" };
     }
 
     const accessToken = this.generateToken(user._id, ACCESS_TOKEN_EXPIRES_IN);
@@ -110,9 +112,9 @@ export default class UserAuthenticationConcept {
   }
 
   /**
-   * Log out a user.
-   * @requires The refresh token is valid.
-   * @effects Invalidates the users refresh token.
+   * Logs out a user.
+   * @requires A valid refresh token must be provided.
+   * @effects Invalidates the user's current refresh token, ending their session.
    */
   public async logout(
     refreshToken: string
@@ -134,9 +136,10 @@ export default class UserAuthenticationConcept {
   }
 
   /**
-   * Change a user's password. 
-   * @requires The access token is valid. The old password matches the user's current password.
-   * @effects Updates the user's password to the new password.
+   * Changes a user's password.
+   * @requires A valid access token must be provided.
+   *           The old password must match the user's current password.
+   * @effects Updates the user's stored password hash to the new password.
    */
   public async changePassword(
     { accessToken, oldPassword, newPassword }: { accessToken: string, oldPassword: string, newPassword: string },
@@ -152,13 +155,14 @@ export default class UserAuthenticationConcept {
     const newHashed = await bcrypt.hash(newPassword, 10);
     await this.users.updateOne({ _id: user._id }, { $set: { hashedPassword: newHashed } });
 
-    return {}
+    return {};
   }
 
   /**
-   * Delete a user's account.
-   * @requires The access token is valid. The provided password matches the user's current password.
-   * @effects Deletes the user's account.
+   * Deletes a user's account.
+   * @requires A valid access token must be provided. 
+   *           The provided password must match the user's current password.
+   * @effects Permanently removes the user's account and associated data.
    */
   public async deleteAccount(
     { accessToken, password }: { accessToken: string, password: string },
@@ -176,9 +180,9 @@ export default class UserAuthenticationConcept {
   }
 
   /**
-   * Refresh a user's access token.
-   * @requires The refresh token is valid.
-   * @effects Generates a new access token for the user.
+   * Refreshes a user's access token.
+   * @requires A valid and active refresh token must be provided.
+   * @effects Generates and returns a new short-lived access token.
    */
   public async refreshAccessToken(
     refreshToken: string
@@ -196,11 +200,11 @@ export default class UserAuthenticationConcept {
   }
 
   /**
-   * Feteches the users info.
-   * @requires The access token is valid.
-   * @effects Returns the users username, id, and email.
+   * Fetches the authenticated user's information.
+   * @requires A valid access token must be provided.
+   * @effects Returns the user's ID, username, and email address.
    */
-  public async _getUserInfo(
+  public async getUserInfo(
     accessToken: string
   ): Promise<{ user: { id: User; username: string; email: string } } | { error: string }> {
     const userId = this.verifyToken(accessToken);
@@ -219,14 +223,14 @@ export default class UserAuthenticationConcept {
   }
 
   /**
-   * Generate JWT token
+   * Generates a signed JWT for the specified user.
    */
   private generateToken(userId: User, expiresIn: string): string {
     return jwt.sign({ userId }, JWT_SECRET, { expiresIn });
   }
 
   /**
-   * Verify JWT token
+   * Verifies a JWT and extracts the associated user ID.
    */
   private verifyToken(token: string): User | null {
     try {
@@ -238,7 +242,7 @@ export default class UserAuthenticationConcept {
   }
 
   /**
-   * Validate email format.
+   * Validates an email string against a basic format pattern.
    */
   private isValidEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

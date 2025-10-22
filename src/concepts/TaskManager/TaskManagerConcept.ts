@@ -53,9 +53,10 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Create a new task.
-   * @requires The title is unique and nonempty. The due date is after the current time.
-   * @effects Creates a new task for the user.
+   * Creates a new task for the specified user.
+   * @requires The title must be unique and non-empty.
+   *           If provided, the due date must be in the future.
+   * @effects Inserts a new task record for the user and returns its ID.
    */
   public async createTask(
     params: { 
@@ -94,9 +95,10 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Update the contents of a task.
-   * @requires The task exists and belongs to the user. Field updates follow task creation restrictions.
-   * @effects Updates the fields of the task.
+   * Updates the details of an existing task.
+   * @requires The task must exist and belong to the user. 
+   *           Updated fields must follow the same validation rules as task creation.
+   * @effects Modifies the specified fields of the task.
    */
   public async updateTask(
     params: { 
@@ -109,7 +111,7 @@ export default class TaskManagerConcept {
   ): Promise<{ task: Task } | { error: string }> {
     const { user, task, title, description, dueDate } = params;
     
-    const taskDoc = await this._getTaskById({ user, task });
+    const taskDoc = await this.getTask({ user, task });
     if ('error' in taskDoc) return { error: taskDoc.error };
   
     if (title) {
@@ -151,14 +153,16 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Mark a task as started.
-   * @requires The task belongs to the user. The task has not already been started. The start time of the task has already passed.
-   * @effects Marks the task as started.
+   * Marks a task as started.
+   * @requires The task must belong to the user. 
+   *           The task must not already be started. 
+   *           The provided start time must be in the past.
+   * @effects Sets the task's `startedAt` field to the provided time.
    */
   public async markStarted(
     { user, task, timeStarted }: { user: User, task: Task, timeStarted: Date },
   ): Promise<Empty | { error: string }> {
-    const taskDoc = await this._getTaskById({ user, task });
+    const taskDoc = await this.getTask({ user, task });
     if ('error' in taskDoc) return { error: taskDoc.error };
 
     if (taskDoc.startedAt) return { error: "Task already marked started" };
@@ -173,14 +177,16 @@ export default class TaskManagerConcept {
   }
   
   /**
-   * Mark a task as completed.
-   * @requires The task belongs to the user. The task has not already been marked completed. The completion time of the task has passed.
-   * @effects Marks the task as complete.
+   * Marks a task as completed.
+   * @requires The task must belong to the user. 
+   *           The task must not already be completed.  
+   *           The provided completion time must be in the past.
+   * @effects Sets the task's `completedAt` field to the provided time.
    */
   public async markComplete(
     { user, task, timeCompleted }: { user: User, task: Task, timeCompleted: Date },
   ): Promise<Empty | { error: string }> {
-    const taskDoc = await this._getTaskById({ user, task });
+    const taskDoc = await this.getTask({ user, task });
     if ('error' in taskDoc) return { error: taskDoc.error };
 
     if (taskDoc.completedAt) return { error: "Task already marked complete" };
@@ -195,14 +201,14 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Delete a task.
-   * @requires The task belongs to the user.
-   * @effects Removes the task from the user's tasks.
+   * Deletes a single task.
+   * @requires The task must belong to the user.
+   * @effects Removes the specified task from the user's records.
    */
   public async deleteTask(
     { user, task }: { user: User, task: Task },
   ): Promise<Empty | { error: string }> {
-    const taskDoc = await this._getTaskById({ user, task });
+    const taskDoc = await this.getTask({ user, task });
     if ('error' in taskDoc) return { error: taskDoc.error };
 
     await this.tasks.deleteOne({ _id: taskDoc._id });
@@ -211,8 +217,8 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Delete all tasks for a user.
-   * @effects Removes all tasks created by user. 
+   * Deletes all tasks for a given user.
+   * @effects Removes every task associated with the user. 
    */
   public async deleteUserTasks(
     { user }: { user: User },
@@ -223,11 +229,11 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Fetches a user's task by its id.
-   * @requires The task belongs to the user.
-   * @effects Returns the task.
+   * Retrieves a single task by its ID.
+   * @requires The task must exist and belong to the user.
+   * @effects Returns the corresponding task document.
    */
-  public async _getTaskById(
+  public async getTask(
     { user, task }: { user: User, task: Task }
   ): Promise<TaskDoc | { error: string }> {
     const taskDoc = await this.tasks.findOne({ _id: task });
@@ -238,31 +244,35 @@ export default class TaskManagerConcept {
   }
 
   /**
-   * Fetches user's tasks that satify the constraints. 
+   * Retrieves a paginated and optionally filtered list of tasks.
+   * @effects Returns tasks matching the provided filters and pagination parameters
    */
-  public async _getUserTasks(
+  public async getTasks(
   {
     user,
-    limit = 50,
-    skip = 0,
-    sortBy = "createdAt",
-    sortOrder = -1,
+    page = 1,
+    limit = 10,
     status,
-    query,
-    dueBefore,
-    dueAfter
+    search,
+    sortBy = "createdAt",
+    sortOrder = -1
   }: {
     user: User;
+    page?: number;
     limit?: number;
-    skip?: number;
+    status?: TaskStatus;
+    search?: string;
     sortBy?: keyof TaskDoc;
     sortOrder?: 1 | -1;
-    status?: TaskStatus;
-    query?: string;
-    dueBefore?: Date;
-    dueAfter?: Date;
   }
-  ): Promise<TaskDoc[]> {
+  ): Promise<{
+    tasks: TaskDoc[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+
     const filter: Record<string, unknown> = { user };
 
     // Status filtering
@@ -276,38 +286,36 @@ export default class TaskManagerConcept {
       filter.completedAt = { $exists: false };
     }
 
-    // Date filtering
-    if (dueBefore || dueAfter) {
-      const dueFilter: Record<string, Date> = {};
-      if (dueBefore) dueFilter["$lt"] = dueBefore;
-      if (dueAfter) dueFilter["$gt"] = dueAfter;
-      filter.dueDate = dueFilter;
-    }
-
     // Text search (simple substring match on title/description)
-    if (query) {
-      filter.$text = { $search: query };
+    if (search) {
+      filter.$text = { $search: search };
     }
 
-    const options = query
+    const options = search
     ? { projection: { score: { $meta: "textScore" } }, sort: { score: { $meta: "textScore" } } }
     : { sort: { [sortBy]: sortOrder } };
 
-    try {
-      return await this.tasks.find(filter, options)
+    const tasks = await this.tasks.find(filter, options)
       .skip(skip)
       .limit(limit)
       .toArray();
-    } catch (error) {
-      console.error("Failed to fetch task:", error);
-      return [];
-    }
+    
+    const total = await this.tasks.countDocuments({ user });
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      tasks,
+      total,
+      page,
+      totalPages
+    };
   }
 
   /**
-   * Determine the status of a task.
+   * Determines the current status of a task.
+   * @effects Returns `"pending"`, `"in-progress"`, or `"completed"` based on task state.
    */
-  public _getTaskStatus(task: TaskDoc): TaskStatus {
+  public getTaskStatus(task: TaskDoc): TaskStatus {
     if (task.completedAt) return "completed";
     if (task.startedAt) return "in-progress";
     return "pending";

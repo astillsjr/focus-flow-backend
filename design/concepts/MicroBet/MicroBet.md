@@ -15,30 +15,35 @@
     * a `success?` of type `Boolean`
 * **actions**:
   * `initializeBettor (user: User)`
-    * **requires**: The user is not already present.
-    * **effects**: Creates a new betting profile for user with no points and a streak of zero.
+    * **requires**: The user must not already be registered as a bettor.
+    * **effects**: Creates a new betting profile for the user with 100 points and a streak of 0.
   * `removeBettor (user: User)`
-    * **requires**: The user exists.
-    * **effects**: Removes the user and all bets place by the user from the system.
+    * **effects**: Deletes the user's profile and all bets placed by them.
   * `placeBet (user: User, task: Task, wager: Number, deadline: Date): (bet: Bet)`
-    * **requires**: The user has a betting profile. A bet does not already exist for this task. The user has more than `wager` points. The deadline for the bet is after the current time.
-    * **effects**: Creates a new bet for the task. Deducts `wager` points from the user.
+    * **requires**: The user must have a betting profile. No existing bet must exist for the same task. The user must have at least `wager` points. The bet deadline must be in the future.
+    * **effects**: Creates a bet on the task and deducts the wager amount from the user's points.
   * `cancelBet (user: User, task: Task)`
-    * **requires**: The user has a betting profile. The bet exists for the task and belongs to the user.
-    * **effects**: Removes the bet. If the bet has not already been resolved then refunds the user their wager.
-  * `resolveBet (user: User, task: Task)`
-    * **requires**: The task was started before bet`s deadline.
-    * **effects**: If the bet has not already been resolved, marks the bet as a success, awards the user additional points, and increases the user's streak by 1. Otherwise indicates the bet is already resolved.
+    * **requires**: The user must have a betting profile. The bet must exist and belong to the user.
+    * **effects**: Deletes the bet. If the bet is unresolved, refunds the wagered points to the user.
+  * `resolveBet (user: User, task: Task, completionTime: Date): (status: String, reward?: Number)`
+    * **requires**: The user must have a betting profile. The bet must exist and belong to the user. The completion time must not exceed the deadline.
+    * **effects**: If unresolved, marks the bet as successful, awards a calculated reward to the user, and increments their streak. Otherwise, reports that the bet was already resolved.
   * `resolveExpiredBet (user: User, task: Task)`
-    * **requires**: The user has a betting profile. The bet exists for the task and belongs to the user. The bet's deadline has already passed.
-    * **effects**: If the bet has not already been resolved, marks the bet as a failure and resets the user's streak. Otherwise indicates the bet is already resolved.
-  * `viewBetHistory (user: User): (bets: Bet[])`
-    * **requires**: The user has a betting profile.
-    * **effects**: Returns a list of all bets for the user, ordered from most recent to least recent.
-  * `_getUserStats (user: User): (points: Number, streak: Number)`
-    * **requires**: The user has a betting profile.
-  * `_getBetForTask (user: User): (points: Number, streak: Number)`
-    * **requires**: The user has a betting profile.
-  * `_getActiveBets (user: User): (points: Number, streak: Number)`
-    * **requires**: The user has a betting profile.
+    * **requires**: The user must have a betting profile. The bet must exist and belong to the user. The deadline must have already passed.
+    * **effects**: If unresolved, marks the bet as failed and resets the user's streak. Otherwise, reports that the bet was already resolved.
+  * `getBet (user: User, task: Task): (bet: BetDoc)`
+    * **requires**: The user must have a betting profile, and a bet must exist for the task.
+    * **effects**: Returns the corresponding bet document.
+  * `getActiveBets (user: User): (bets: BetDoc[])`
+    * **requires**: The user must have a betting profile.
+    * **effects**: Returns all bets that are still active and unresolved.
+  * `getExpiredBets (user: User): (bets: BetDoc[])`
+    * **requires**: The user must have a betting profile.
+    * **effects**: Returns bets that have passed their deadlines but have not been resolved.
+  * `getUserProfile (user: User): (points: Number, streak: Number, totalBets: Number, successfulBets: Number, failedBets: Number, pendingBets: Number)`
+    * **requires**: The user must have a betting profile.
+    * **effects**: Returns aggregated statistics on points, streak, and bet outcomes.
+  * `getRecentActivity (user: User, limit?: Number): (bets: BetDoc[])`
+    * **requires**: The user must have a betting profile.
+    * **effects**: Returns the user's most recent bets, sorted by creation time.
   

@@ -54,35 +54,33 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
     );
 
     // 3. View trends
-    const trendsResult = await emotions.viewEmotionTrends({ user });
-    assertEquals("error" in trendsResult, false, "Should return trends, not error.");
+    const stats = await emotions.getEmotionStats({ user });
+    assertEquals("error" in stats, false, "Should return trends, not error.");
 
-    const { trends } = trendsResult as {
-      trends: {
-        total: number;
-        counts: Partial<Record<Emotion, number>>;
-        byPhase: Record<"before" | "after", Partial<Record<Emotion, number>>>;
-        recentEmotions: { phase: "before" | "after"; emotion: Emotion; createdAt: Date }[];
-      };
+    const {
+      totalLogs,
+      mostCommonEmotion,
+      leastCommonEmotion,
+      averageEmotionsPerDay,
+      recentTrend,
+    } = stats as {
+      totalLogs: number;
+      mostCommonEmotion: Emotion | null;
+      leastCommonEmotion: Emotion | null;
+      averageEmotionsPerDay: number;
+      recentTrend: "improving" | "declining" | "stable" | "insufficient_data";
     };
 
     // Total logs should be 2
-    assertEquals(trends.total, 2, "Total number of emotion logs should be 2.");
+    assertEquals(totalLogs, 2, "Total number of emotion logs should be 2.");
 
-    // Emotion counts should reflect 1 anxious and 1 motivated
-    assertEquals(trends.counts.anxious, 1, "Anxious count should be 1.");
-    assertEquals(trends.counts.motivated, 1, "Motivated count should be 1.");
+    // Most and least common emotions should be... 
+    assertEquals(mostCommonEmotion, Emotion.Motivated, "Most common emotion should be 'motivated'.");
+    assertEquals(leastCommonEmotion, Emotion.Anxious, "Least common emotion should be 'anxious'.");
 
     // Phase breakdown should match
-    assertEquals(trends.byPhase.before.anxious, 1, "'Before' phase should have 1 anxious.");
-    assertEquals(trends.byPhase.after.motivated, 1, "'After' phase should have 1 motivated.");
-
-    // Recent emotions should include both logs (in descending order of createdAt)
-    assertEquals(trends.recentEmotions.length, 2, "Should return 2 recent emotions.");
-    const recentPhases = trends.recentEmotions.map(e => e.phase);
-    const recentEmotions = trends.recentEmotions.map(e => e.emotion);
-    assertEquals(new Set(recentPhases), new Set(["before", "after"]), "Recent emotions should include both phases.");
-    assertEquals(new Set(recentEmotions), new Set(["anxious", "motivated"]), "Recent emotions should include both emotions.");
+    assertEquals(averageEmotionsPerDay, 2, "Average emotions per day should be 2.");
+    assertEquals(recentTrend, "insufficient_data", "There should be enough logs for a recent trend.");
   });
 
   await t.step("Action: logging prohibits duplicates in the same phase", async () => {
@@ -110,13 +108,13 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
   });
 
   await t.step("Action: trends should fail with no logs", async () => {
-    const result = await emotions.viewEmotionTrends({
+    const result = await emotions.getEmotionStats({
       user: "user:Ghost" as ID,
     });
     assertEquals("error" in result, true);
     assertEquals(
       (result as { error: string }).error,
-      "No logs for this user",
+      "No emotion logs found",
     );
   });
 

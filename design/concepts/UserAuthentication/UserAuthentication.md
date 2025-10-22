@@ -12,23 +12,23 @@
     * a `refreshToken` of type `String`
 * **actions**:
   * `register (username: String, password: String, email: String): (accessToken: string, refreshToken: string)`
-    * **requires**: The email and username are not already in use. The email is in a valid email form.
-    * **effects**: Creates a new user with the provided username and password and returns the user's session token. 
+    * **requires**: The provided email and username must not already exist. The email must be in valid format.
+    * **effects**: Creates a new user record with a hashed password and returns a new pair of session tokens.
   * `login (username: String, password: String): (accessToken: string, refreshToken: string)`
-    * **requires**: The user with matching username and password exists.
-    * **effects**: Returns the user's session token.
+    * **requires**: The provided username and password must match an existing user account.
+    * **effects**: Returns a new pair of access and refresh tokens for the authenticated user.
   * `logout (refreshToken: string)`
-    * **requires**: The refresh token is valid.
-    * **effects**: Invalidates the users refresh token.
+    * **requires**: A valid refresh token must be provided.
+    * **effects**: Invalidates the user's current refresh token, ending their session.
   * `changePassword (accessToken: string, oldPassword: string, newPassword: String)`
-    * **requires**: The access token is valid. The old password matches the user's current password.
-    * **effects**: Updates the user's password to the new password.
+    * **requires**: A valid access token must be provided. The old password must match the user's current password.
+    * **effects**: Updates the user's stored password hash to the new password.
   * `deleteAccount (accessToken: string, password: string)`
-    * **requires**: The access token is valid. The provided password matches the user's current password.
-    * **effects**: Deletes the user's account.
-  * `refreshAccessToken (refreshToken: string, password: string)`
-    * **requires**: The refresh token is valid. The provided password matches the user's current password.
-    * **effects**: Generates a new access token for the user.
-  * `_getUserInfo (refreshToken: string, password: string)`
-    * **requires**: The access token is valid.
-    * **effects**: Returns the users username, id, and email.
+    * **requires**: A valid access token must be provided. The provided password matches the user's current password.
+    * **effects**: Permanently removes the user's account and associated data.
+  * `refreshAccessToken (refreshToken: string): (accessToken: string)`
+    * **requires**: A valid and active refresh token must be provided.
+    * **effects**: Generates and returns a new short-lived access token.
+  * `getUserInfo (accessToken: string): (user: { id: User, username: String, email: String })`
+    * **requires**: A valid access token must be provided.
+    * **effects**: Returns the user's ID, username, and email address.

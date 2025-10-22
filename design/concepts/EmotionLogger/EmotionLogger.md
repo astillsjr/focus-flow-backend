@@ -11,27 +11,25 @@
     * a `emotion` of type `Emotion` (“dreading”, “anxious”, “neutral”, “motivated”, etc.)
     * a `createdAt` of type `Date`
 * **actions**:
-  * `logBefore (user: User, task: Task, phase: Phase, emotion: Emotion): (log: Log)`
-    * **requires**: A log does not already exist for the task before it was complete.
-    * **effects**: Adds a new log entry for the task before it was complete.
-  * `logEmotion (user: User, task: Task, phase: Phase, emotion: Emotion): (log: Log)`
-    * **requires**: A log does not already exist for the task after it was complete.
-    * **effects**: Adds a new log entry for the task after it was complete.
+  * `logBefore (user: User, task: Task, emotion: Emotion): (log: Log)`
+    * **requires**: A "before" log must not already exist for the same task.
+    * **effects**: Adds a new log entry capturing the user's emotional state before completion.
+  * `logAfter (user: User, task: Task, emotion: Emotion): (log: Log)`
+    * **requires**: An "after" log must not already exist for the same task.
+    * **effects**: Adds a new log entry capturing the user's emotional state after completion.
   * `deleteTaskLogs (user: User, task: Task)`
-    * **effects**: Removes the log from the users logs.
+    * **effects**: Removes all logs associated with the specified task for the given user.
   * `deleteUserLogs (user: User)`
-    * **effects**: Removes all emotion logs logged by the specified user.
-  * `viewEmotionTrends (user: User): (trends: Trends)`
-    * **requires**: The user has at least one log.
-    * **effects**: Returns summary statistics of logs.
-  * `analyzeRecentEmotions (user: User): (analysis: string)`
-    * **requires**: The user has at least one log.
-    * **effects**: Creates a short summary analyzing the users recent emotional states.
-  * `_getUserLogs (user: User, limit: number): (logs: Log[])`
-    * **effects**: Returns the user logs. 
-  * `_getLogsForTask (user: User, task: Task): (logs: Log[])`
-    * **effects**: Returns the user's logs for the task.
-  * `_getEmotionsForTask (user: User, task: Task): (task: Task, emotions: Emotions)`
-    * **effects**: Returns the user's emotions on the task.
+    * **effects**: Removes every emotion log associated with the given user.
+  * `analyzeRecentEmotions (user: User): (analysis: String)`
+    * **requires**: The user must have at least one recorded emotion log.
+    * **effects**: Produces a brief AI-generated emotional summary highlighting trends and shifts.
+  * `getEmotionsForTask (user: User, task: Task): (task: Task, emotions: Partial<Record<Phase, Emotion>>)`
+    * **effects**: Returns both "before" and "after" emotion states associated with the given task.
+  * `getEmotionLogs (user: User, page?: Number, limit?: Number, phase?: Phase, emotion?: Emotion, sortBy?: keyof LogDoc, sortOrder?: 1 | -1): (logs: LogDoc[], total: Number, page: Number, totalPages: Number)`
+    * **effects**: Returns paginated and optionally filtered emotion logs.
+  * `getEmotionStats (user: User): (totalLogs: Number, mostCommonEmotion: Emotion | null, leastCommonEmotion: Emotion | null, averageEmotionsPerDay: Number, recentTrend: String)`
+    * **requires**: The user must have at least one recorded emotion log.
+    * **effects**: Returns aggregate emotion statistics including most/least common emotions, average logs per day, and a recent emotional trend classification.
   
   

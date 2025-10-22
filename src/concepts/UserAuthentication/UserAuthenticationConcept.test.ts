@@ -200,11 +200,11 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
     );
     const { accessToken, refreshToken: _refreshToken } = registration as { accessToken: string, refreshToken: string };
 
-    const info = await auth._getUserInfo(accessToken);
+    const info = await auth.getUserInfo(accessToken);
     if (!("user" in info)) throw new Error(`getUserInfo failed: ${info.error}`);
     assertEquals(info.user.username, "alice");
 
-    const result = await auth._getUserInfo("bad.token.value");
+    const result = await auth.getUserInfo("bad.token.value");
     assertEquals(
       "error" in result, 
       true,

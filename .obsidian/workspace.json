@@ -11,10 +11,14 @@
             "id": "a195526758345ba2",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "design/tools/api-extraction-from-code.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "api-extraction-from-code"
             }
           }
         ]
@@ -167,6 +171,8 @@
   },
   "active": "a195526758345ba2",
   "lastOpenFiles": [
+    "design/tools/api-extraction-from-spec.md",
+    "design/tools/api-extraction-from-code.md",
     "design/background/testing-concepts.md",
     "design/concepts/UserAuthentication/testing.md",
     "context/design/concepts/UserAuthentication/testing.md/20251016_204037.5663cbac.md",
@@ -192,9 +198,7 @@
     "design/concepts/MicroBet/testing.md",
     "design/concepts/NudgeEngine/testing.md",
     "design/concepts/TaskManager/testing.md",
-    "design/concepts/TaskManager/implementation.md",
     "src/utils/emotions.ts",
-    "design/concepts/UserAuthentication/implementation.md",
     "context/design/concepts/TaskManager/implementation.md/steps",
     "context/design/concepts/TaskManager",
     "context/design/concepts/UserAuthentication/implementation.md/steps",

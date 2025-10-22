@@ -55,9 +55,9 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Add a user to the betting system.
-   * @requires The user is not already present.
-   * @effects Creates a new betting profile for user with no points and a streak of zero.
+   * Initializes a user in the betting system.
+   * @requires The user must not already be registered as a bettor.
+   * @effects Creates a new betting profile for the user with 100 points and a streak of 0.
    */
   public async initializeBettor(
     { user }: { user: User },
@@ -65,13 +65,13 @@ export default class MicroBetConcept {
     const userProfile = await this.users.findOne({ _id: user });
     if (userProfile) return { error: "User already initialized" };
 
-    await this.users.insertOne({ _id: user, points: 0, streak: 0 });
+    await this.users.insertOne({ _id: user, points: 100, streak: 0 });
     return {};
   }
 
   /**
-   * Remove a user from the betting system.
-   * @effects Removes the user and all bets place by the user from the system.
+   * Removes a user and their bets from the system.
+   * @effects Deletes the user's profile and all bets placed by them.
    */
   public async removeBettor(
     { user }: { user: User },
@@ -85,9 +85,12 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Generate a bet.
-   * @requires The user has a betting profile. A bet does not already exist for this task. The user has more than `wager` points. The deadline for the bet is after the current time.
-   * @effects Creates a new bet for the task. Deducts `wager` points from the user.
+   * Places a new bet on a task.
+   * @requires The user must have a betting profile. 
+   *           No existing bet must exist for the same task. 
+   *           The user must have at least `wager` points. 
+   *           The bet deadline must be in the future.
+   * @effects Creates a bet on the task and deducts the wager amount from the user's points.
    */
   public async placeBet({
     user, task, wager, deadline
@@ -101,7 +104,6 @@ export default class MicroBetConcept {
 
     const userProfile = await this.users.findOne({ _id: user });
     if (!userProfile) return { error: "User profile not found" };
-
     if (userProfile.points < wager) return { error: "Insufficient points to wager" };
 
     const newBet: BetDoc = {
@@ -118,27 +120,22 @@ export default class MicroBetConcept {
         { _id: user, points: { $gte: wager } },
         { $inc: { points: -wager } }
       );
-
       if (updated.modifiedCount === 0) return { error: "Failed to deduct points" };
 
       await this.bets.insertOne(newBet);
-
       return { bet: newBet._id };
-    } catch (err) {
-      if (err instanceof MongoServerError && err.code === 11000) {
-        return { error: "Bet for this task already exists" };
-      }
-
-      // If insert fails after deducting, refund points
+    } catch (_err) {
       await this.users.updateOne({ _id: user }, { $inc: { points: wager } });
-      throw err; 
+      return { error: "Failed to place bet" }
     }
   }
 
   /**
-   * Cancel a bet.
-   * @requires The user has a betting profile. The bet exists for the task and belongs to the user.
-   * @effects Removes the bet. If the bet has not already been resolved then refunds the user their wager.
+   * Cancels an existing bet.
+   * @requires The user must have a betting profile.
+   *           The bet must exist and belong to the user.
+   * @effects Deletes the bet. 
+   *          If the bet is unresolved, refunds the wagered points to the user.
    */
   public async cancelBet(
     { user, task }: { user: User, task: Task }
@@ -160,9 +157,13 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Attempt to resolve a bet.
-   * @requires The user has a betting profile. The bet exists for the task and belongs to the user.
-   * @effects If the bet has not already been resolved, marks the bet as a success, awards the user additional points, and increases the user's streak by 1. Otherwise indicates the bet is already resolved.
+   * Resolves a bet when a task is completed.
+   * @requires The user must have a betting profile. 
+   *           The bet must exist and belong to the user.
+   *           The completion time must not exceed the deadline.
+   * @effects If unresolved, marks the bet as successful, 
+   *          awards a calculated reward to the user, and increments their streak. 
+   *          Otherwise, reports that the bet was already resolved.
    */
   public async resolveBet(
     { user, task, completionTime }: { user: User, task: Task, completionTime: Date },
@@ -196,9 +197,12 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Resolve an expired bet.
-   * @requires The user has a betting profile. The bet exists for the task and belongs to the user. The bet's deadline has already passed.
-   * @effects If the bet has not already been resolved, marks the bet as a failure and resets the user's streak. Otherwise indicates the bet is already resolved.
+   * Resolves a bet that has passed its deadline.
+   * @requires The user must have a betting profile. 
+   *           The bet must exist and belong to the user.  
+   *           The deadline must have already passed.
+   * @effects If unresolved, marks the bet as failed and resets the user's streak. 
+   *          Otherwise, reports that the bet was already resolved.
    */
   public async resolveExpiredBet (
     { user, task }: { user: User, task: Task }
@@ -224,47 +228,11 @@ export default class MicroBetConcept {
   }
 
   /**
-   * View the user's bet history.
-   * @requires The user has a betting profile.
-   * @effects Returns a list of all bets for the user, ordered from most recent to least recent and filtered by status if provided.
+   * Retrieves a specific bet for a user.
+   * @requires The user must have a betting profile, and a bet must exist for the task.
+   * @effects Returns the corresponding bet document.
    */
-  public async viewBetHistory(
-    { user, status }: { user: User, status?: "pending" | "success" | "failure" },
-  ): Promise<BetDoc[] | { error: string }> {
-    const userProfile = await this.users.findOne({ _id: user });
-    if (!userProfile) return { error: "User profile not found" };
-
-    const filter: Record<string, unknown> = { user };
-
-    if (status === "pending") {
-      filter.success = { $exists: false };
-    } else if (status === "success") {
-      filter.success = true;
-    } else if (status === "failure") {
-      filter.success = false;
-    }
-
-    return await this.bets.find(filter).sort({ createdAt: -1 }).toArray();
-  }
-
-  /**
-   * Fetch a users stats.
-   * @requires The user has a betting profile. 
-   */
-  public async _getUserStats(
-    { user }: { user: User }
-  ): Promise<{ points: number, streak: number } | { error: string }> {
-    const profile = await this.users.findOne({ _id: user });
-    return profile
-      ? { points: profile.points, streak: profile.streak }
-      : { error: "User profile not found" };
-  }
-
-  /**
-   * Fetch the bet for a specific task.
-   * @requires The user has a betting profile. The has a bet placed on it.
-   */
-  public async _getBetForTask(
+  public async getBet(
     { user, task }: { user: User, task: Task }
   ): Promise<BetDoc | { error: string }> {
     const bet = await this.bets.findOne({ user, task });
@@ -272,10 +240,11 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Fetch the active bets for a user.
-   * @requires The user has a betting profile.
+   * Retrieves all active (unresolved) bets for a user.
+   * @requires The user must have a betting profile.
+   * @effects Returns all bets that are still active and unresolved.
    */
-  public async _getActiveBets(
+  public async getActiveBets(
     { user }: { user: User }
   ): Promise<BetDoc[] | { error: string }> {
     const userProfile = await this.users.findOne({ _id: user });
@@ -285,7 +254,79 @@ export default class MicroBetConcept {
   }
 
   /**
-   * Calculates the amount a bet should award.
+   * Retrieves all expired (unresolved and past-deadline) bets for a user.
+   * @requires The user must have a betting profile.
+   * @effects Returns bets that have passed their deadlines but have not been resolved.
+   */
+  public async getExpiredBets(
+    { user }: { user: User }
+  ): Promise<BetDoc[] | { error: string }> {
+    const userProfile = await this.users.findOne({ _id: user });
+    if (!userProfile) return { error: "User profile not found" };
+    
+    return this.bets.find({
+      user,
+      success: { $exists: false },
+      deadline: { $lt: new Date() },
+    }).toArray();
+  }
+
+  /**
+   * Retrieves the user's overall betting profile and statistics.
+   * @requires The user must have a betting profile.
+   * @effects Returns aggregated statistics on points, streak, and bet outcomes.
+   */
+  public async getUserProfile(
+    { user }: { user: User }
+  ): Promise<{
+    points: number;
+    streak: number;
+    totalBets: number;
+    successfulBets: number;
+    failedBets: number;
+    pendingBets: number;
+  } | { error: string }> {
+    const profile = await this.users.findOne({ _id: user });
+    if (!profile) return { error: "User profile not found" };
+
+    const [totalBets, successfulBets, failedBets, pendingBets] = await Promise.all([
+      this.bets.countDocuments({ user }),
+      this.bets.countDocuments({ user, success: true }),
+      this.bets.countDocuments({ user, success: false }),
+      this.bets.countDocuments({ user, success: { $exists: false } })
+    ]);
+
+    return {
+      points: profile.points,
+      streak: profile.streak,
+      totalBets,
+      successfulBets,
+      failedBets,
+      pendingBets
+    };
+  }
+
+  /**
+   * Retrieves recent betting activity for a user.
+   * @requires The user must have a betting profile.
+   * @effects Returns the user's most recent bets, sorted by creation time.
+   */
+  public async getRecentActivity(
+    { user, limit = 10 }: { user: User; limit?: number }
+  ): Promise<BetDoc[] | { error: string }> {
+    const userProfile = await this.users.findOne({ _id: user });
+    if (!userProfile) return { error: "User profile not found" };
+
+    return await this.bets
+      .find({ user })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  /**
+   * Calculates the reward amount for a successful bet.
+   * @effects Returns the computed reward based on the wager and user's streak.
    */
   private calculateReward (wager: number, streak: number): number {
     const STREAK_MULTIPLIER = 0.15;

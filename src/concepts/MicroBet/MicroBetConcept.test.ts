@@ -78,25 +78,39 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     );
 
     // 4. View stats
-    const stats = await bets._getUserStats({ user });
+    const stats = await bets.getUserProfile({ user });
     assertNotEquals(
-      "error" in place,
+      "error" in stats,
       true,
       "Stat fetch should not fail.",
     );
     assertEquals(
-      (stats as { points: number, streak: number}).points, 
+      (stats as {
+        points: number;
+        streak: number;
+        totalBets: number;
+        successfulBets: number;
+        failedBets: number;
+        pendingBets: number;
+      }).points, 
       101,
       "Incorrect user stats fetch."
     );
     assertEquals(
-      (stats as { points: number, streak: number}).streak, 
+      (stats as {
+        points: number;
+        streak: number;
+        totalBets: number;
+        successfulBets: number;
+        failedBets: number;
+        pendingBets: number;
+      }).streak, 
       1,
       "Incorrect user stats fetch."
     );
 
     // 5. View history
-    const history = await bets.viewBetHistory({ user });
+    const history = await bets.getRecentActivity({ user });
     assertEquals(Array.isArray(history), true);
     assertEquals((history as any[]).length >= 1, true);
   });
@@ -161,7 +175,7 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     );
     assertEquals(
       (duplicate as { error: string }).error,
-      "Bet for this task already exists",
+      "Failed to place bet",
     );
 
     const past = await bets.placeBet({
