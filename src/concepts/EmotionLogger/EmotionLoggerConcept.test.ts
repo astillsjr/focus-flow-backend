@@ -10,25 +10,27 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
   const user = "user:Emma" as ID;
   const task = "task:Essay" as ID;
 
-  // ---------------------------
-  // OPERATIONAL PRINCIPLE TEST
-  // ---------------------------
-  await t.step("Operational Principle: logBefore → logAfter → viewEmotionTrends", async () => {
-    console.log("\n--- Operational Principle Sequence ---");
-
+  await t.step("Principle: User logs emotion before and after a task, views their trends", async () => {
     // 1. Log "before" emotion
     const before = await emotions.logBefore({
       user,
       task,
       emotion: Emotion.Anxious,
     });
-    console.log("Action: logBefore →", before);
-    assertEquals("error" in before, false);
+    assertEquals(
+      "error" in before, 
+      false,
+      "Logging before a task should succeed."
+    );
 
     const { log: beforeId } = before as { log: ID };
     const beforeDoc = await emotions.logs.findOne({ _id: beforeId });
     assertExists(beforeDoc);
-    assertEquals(beforeDoc.emotion, "anxious");
+    assertEquals(
+      beforeDoc.emotion, 
+      "anxious",
+      "Incorrect emotion logging for before task log."
+    );
 
     // 2. Log "after" emotion
     const after = await emotions.logAfter({
@@ -36,37 +38,59 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
       task,
       emotion: Emotion.Motivated,
     });
-    console.log("Action: logAfter →", after);
-    assertEquals("error" in after, false);
+    assertEquals(
+      "error" in after, 
+      false,
+      "Logging after a task should succeed."
+    );
 
     const { log: afterId } = after as { log: ID };
     const afterDoc = await emotions.logs.findOne({ _id: afterId });
     assertExists(afterDoc);
-    assertEquals(afterDoc.emotion, "motivated");
+    assertEquals(
+      afterDoc.emotion, 
+      "motivated",
+      "Incorrect emotion logging for after task log."
+    );
 
     // 3. View trends
-    const trends = await emotions.viewEmotionTrends({ user });
-    console.log("Action: viewEmotionTrends →", trends);
-    assertEquals("error" in trends, false);
-    assertEquals(
-      (trends as { trends: string }).trends,
-      "Trend analysis not implemented yet",
-    );
+    const trendsResult = await emotions.viewEmotionTrends({ user });
+    assertEquals("error" in trendsResult, false, "Should return trends, not error.");
+
+    const { trends } = trendsResult as {
+      trends: {
+        total: number;
+        counts: Partial<Record<Emotion, number>>;
+        byPhase: Record<"before" | "after", Partial<Record<Emotion, number>>>;
+        recentEmotions: { phase: "before" | "after"; emotion: Emotion; createdAt: Date }[];
+      };
+    };
+
+    // Total logs should be 2
+    assertEquals(trends.total, 2, "Total number of emotion logs should be 2.");
+
+    // Emotion counts should reflect 1 anxious and 1 motivated
+    assertEquals(trends.counts.anxious, 1, "Anxious count should be 1.");
+    assertEquals(trends.counts.motivated, 1, "Motivated count should be 1.");
+
+    // Phase breakdown should match
+    assertEquals(trends.byPhase.before.anxious, 1, "'Before' phase should have 1 anxious.");
+    assertEquals(trends.byPhase.after.motivated, 1, "'After' phase should have 1 motivated.");
+
+    // Recent emotions should include both logs (in descending order of createdAt)
+    assertEquals(trends.recentEmotions.length, 2, "Should return 2 recent emotions.");
+    const recentPhases = trends.recentEmotions.map(e => e.phase);
+    const recentEmotions = trends.recentEmotions.map(e => e.emotion);
+    assertEquals(new Set(recentPhases), new Set(["before", "after"]), "Recent emotions should include both phases.");
+    assertEquals(new Set(recentEmotions), new Set(["anxious", "motivated"]), "Recent emotions should include both emotions.");
   });
 
-  // ---------------------------
-  // INTERESTING SCENARIOS
-  // ---------------------------
-
-  await t.step("Scenario 1: Prevent duplicate logs in same phase", async () => {
-    console.log("\n--- Scenario 1: Duplicate Logs ---");
-
+  await t.step("Action: logging prohibits duplicates in the same phase", async () => {
     const dup = await emotions.logBefore({
       user,
       task,
       emotion: Emotion.Neutral,
     });
-    console.log("Action: logBefore duplicate →", dup);
     assertEquals("error" in dup, true);
     assertEquals(
       (dup as { error: string }).error,
@@ -74,27 +98,21 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
     );
   });
 
-  await t.step("Scenario 2: Delete task logs", async () => {
-    console.log("\n--- Scenario 2: Delete Task Logs ---");
-
+  await t.step("Action: delete task logs removes all logs for a task", async () => {
     const beforeDelete = await emotions.logs.find({ user, task }).toArray();
     assertEquals(beforeDelete.length, 2);
 
     const del = await emotions.deleteTaskLogs({ user, task });
-    console.log("Action: deleteTaskLogs →", del);
     assertEquals("error" in del, false);
 
     const afterDelete = await emotions.logs.find({ user, task }).toArray();
     assertEquals(afterDelete.length, 0);
   });
 
-  await t.step("Scenario 3: Handle trends for users with no logs", async () => {
-    console.log("\n--- Scenario 3: Trends Without Logs ---");
-
+  await t.step("Action: trends should fail with no logs", async () => {
     const result = await emotions.viewEmotionTrends({
       user: "user:Ghost" as ID,
     });
-    console.log("Action: viewEmotionTrends (no logs) →", result);
     assertEquals("error" in result, true);
     assertEquals(
       (result as { error: string }).error,
@@ -102,9 +120,7 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
     );
   });
 
-  await t.step("Scenario 4: Delete all logs for a user", async () => {
-    console.log("\n--- Scenario 4: Delete All User Logs ---");
-
+  await t.step("Action: Delete user logs should remove all the user's logs", async () => {
     // Add multiple tasks
     const taskList = ["task:A", "task:B", "task:C"];
     for (const tsk of taskList) {
@@ -124,16 +140,13 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
     assertEquals(beforeDel.length, 6);
 
     const del = await emotions.deleteUserLogs({ user });
-    console.log("Action: deleteUserLogs →", del);
     assertEquals("error" in del, false);
 
     const afterDel = await emotions.logs.find({ user }).toArray();
     assertEquals(afterDel.length, 0);
   });
 
-  await t.step("Scenario 5: Log multiple users independently", async () => {
-    console.log("\n--- Scenario 5: Multiple Users ---");
-
+  await t.step("Action: multiple users should log freely", async () => {
     const user2 = "user:Liam" as ID;
     const task2 = "task:Study" as ID;
 
@@ -148,7 +161,6 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
       emotion: Emotion.Neutral,
     });
 
-    console.log("User 2 actions:", beforeLiam, afterLiam);
     assertEquals("error" in beforeLiam, false);
     assertEquals("error" in afterLiam, false);
 

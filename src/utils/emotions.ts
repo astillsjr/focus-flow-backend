@@ -52,3 +52,5 @@ export enum Emotion {
   Stuck = "stuck",
   Hesitating = "hesitating",
 }
+
+export const ALL_EMOTIONS: Emotion[] = Object.values(Emotion);

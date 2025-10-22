@@ -1,7 +1,6 @@
 import { Collection, Db, MongoServerError } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
-import { error } from "node:console";
 
 // Collection prefix to avoid name clashes
 const PREFIX = "MicroBet" + ".";

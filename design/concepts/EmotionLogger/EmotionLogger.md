@@ -19,8 +19,19 @@
     * **effects**: Adds a new log entry for the task after it was complete.
   * `deleteTaskLogs (user: User, task: Task)`
     * **effects**: Removes the log from the users logs.
-  * `viewEmotionTrends (user: User): (trends: string)`
-    * **requires**: The user exists.
-    * **effects**: Returns summary statistics or visual data of emotional shifts.
   * `deleteUserLogs (user: User)`
     * **effects**: Removes all emotion logs logged by the specified user.
+  * `viewEmotionTrends (user: User): (trends: Trends)`
+    * **requires**: The user has at least one log.
+    * **effects**: Returns summary statistics of logs.
+  * `analyzeRecentEmotions (user: User): (analysis: string)`
+    * **requires**: The user has at least one log.
+    * **effects**: Creates a short summary analyzing the users recent emotional states.
+  * `_getUserLogs (user: User, limit: number): (logs: Log[])`
+    * **effects**: Returns the user logs. 
+  * `_getLogsForTask (user: User, task: Task): (logs: Log[])`
+    * **effects**: Returns the user's logs for the task.
+  * `_getEmotionsForTask (user: User, task: Task): (task: Task, emotions: Emotions)`
+    * **effects**: Returns the user's emotions on the task.
+  
+  
