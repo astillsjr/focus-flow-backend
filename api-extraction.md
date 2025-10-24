@@ -876,9 +876,11 @@ This document provides comprehensive API documentation for all concepts in the F
 - No existing bet must exist for the same task.
 - The user must have at least `wager` points.
 - The bet deadline must be in the future.
+- If provided, the bet deadline must be before the task due date.
 
 **Effects:**
 - Creates a bet on the task and deducts the wager amount from the user's points.
+- The task due date is stored for reward calculation with time bonus.
 
 **Request Body:**
 ```json
@@ -886,7 +888,8 @@ This document provides comprehensive API documentation for all concepts in the F
   "user": "string",
   "task": "string",
   "wager": "number",
-  "deadline": "Date"
+  "deadline": "Date",
+  "taskDueDate": "Date (optional)"
 }
 ```
 
@@ -949,7 +952,7 @@ This document provides comprehensive API documentation for all concepts in the F
 - The completion time must not exceed the deadline.
 
 **Effects:**
-- If unresolved, marks the bet as successful, awards a calculated reward to the user, and increments their streak. Otherwise, reports that the bet was already resolved.
+- If unresolved, marks the bet as successful, awards a calculated reward (based on wager, streak, and time bonus) to the user, and increments their streak. Otherwise, reports that the bet was already resolved.
 
 **Request Body:**
 ```json
@@ -1039,6 +1042,7 @@ This document provides comprehensive API documentation for all concepts in the F
   "task": "string",
   "wager": "number",
   "deadline": "Date",
+  "taskDueDate": "Date (optional)",
   "success": "boolean (optional)",
   "createdAt": "Date"
 }
@@ -1079,6 +1083,7 @@ This document provides comprehensive API documentation for all concepts in the F
     "task": "string",
     "wager": "number",
     "deadline": "Date",
+    "taskDueDate": "Date (optional)",
     "success": "boolean (optional)",
     "createdAt": "Date"
   }
@@ -1120,6 +1125,7 @@ This document provides comprehensive API documentation for all concepts in the F
     "task": "string",
     "wager": "number",
     "deadline": "Date",
+    "taskDueDate": "Date (optional)",
     "success": "boolean (optional)",
     "createdAt": "Date"
   }
@@ -1200,6 +1206,7 @@ This document provides comprehensive API documentation for all concepts in the F
     "task": "string",
     "wager": "number",
     "deadline": "Date",
+    "taskDueDate": "Date (optional)",
     "success": "boolean (optional)",
     "createdAt": "Date"
   }

@@ -29,6 +29,7 @@ interface UserDoc {
  *   a task Task
  *   a wager Number
  *   a deadline Date
+ *   a taskDueDate? Date
  *   a success? Boolean
  */
 interface BetDoc {
@@ -37,6 +38,7 @@ interface BetDoc {
   task: Task;
   wager: number;
   deadline: Date;
+  taskDueDate?: Date;
   success?: boolean;
   createdAt: Date;
 }
@@ -90,17 +92,24 @@ export default class MicroBetConcept {
    *           No existing bet must exist for the same task. 
    *           The user must have at least `wager` points. 
    *           The bet deadline must be in the future.
+   *           If provided, the bet deadline must be before the task due date.
    * @effects Creates a bet on the task and deducts the wager amount from the user's points.
    */
   public async placeBet({
-    user, task, wager, deadline
+    user, task, wager, deadline, taskDueDate
   }: {
     user: User;
     task: Task;
     wager: number;
     deadline: Date;
+    taskDueDate?: Date;
   }): Promise<{ bet: Bet } | { error: string }> {
     if (deadline.getTime() < Date.now()) return { error: "Deadline must be in the future" };
+
+    // Validate that bet deadline is before task due date if provided
+    if (taskDueDate && deadline.getTime() >= taskDueDate.getTime()) {
+      return { error: "Bet deadline must be before task due date" };
+    }
 
     const userProfile = await this.users.findOne({ _id: user });
     if (!userProfile) return { error: "User profile not found" };
@@ -112,6 +121,7 @@ export default class MicroBetConcept {
       task,
       wager,
       deadline,
+      taskDueDate,
       createdAt: new Date(),
     }
 
@@ -186,7 +196,12 @@ export default class MicroBetConcept {
       return { error: "Cannot resolve: deadline has passed" }; 
     }
 
-    const reward = this.calculateReward(betDoc.wager, userProfile.streak + 1);
+    const reward = this.calculateReward(
+      betDoc.wager, 
+      userProfile.streak + 1,
+      betDoc.deadline,
+      betDoc.taskDueDate
+    );
 
     await Promise.all([
       this.bets.updateOne({ _id: betDoc._id }, { $set: { success: true } }),
@@ -326,12 +341,43 @@ export default class MicroBetConcept {
 
   /**
    * Calculates the reward amount for a successful bet.
-   * @effects Returns the computed reward based on the wager and user's streak.
+   * @effects Returns the computed reward based on the wager, user's streak, and timing bonus.
+   *          The timing bonus rewards earlier bet deadlines relative to the task due date.
    */
-  private calculateReward (wager: number, streak: number): number {
+  private calculateReward(
+    wager: number, 
+    streak: number,
+    betDeadline: Date,
+    taskDueDate?: Date
+  ): number {
     const STREAK_MULTIPLIER = 0.15;
+    const TIME_BONUS_MULTIPLIER = 0.25; // Maximum bonus from early start
+    const MAX_TIME_BONUS_DAYS = 14; // Cap at 2 weeks for maximum bonus
+    const DEFAULT_TIME_BONUS = 0.3; // 30% of max bonus as fallback
+    
+    // Calculate streak bonus
     const streakBonus = Math.log(Math.log(streak + Math.E));
-    const reward = wager * (1 + STREAK_MULTIPLIER * streakBonus);
+    
+    // Calculate time bonus
+    let timeBonus = 0;
+    if (taskDueDate) {
+      // Calculate days between bet deadline and task due date
+      const timeGapMs = taskDueDate.getTime() - betDeadline.getTime();
+      const timeGapDays = timeGapMs / (1000 * 60 * 60 * 24);
+      
+      // Cap at MAX_TIME_BONUS_DAYS to prevent farming
+      const effectiveGap = Math.min(Math.max(timeGapDays, 0), MAX_TIME_BONUS_DAYS);
+      
+      // Normalize to 0-1 range and apply multiplier
+      timeBonus = (effectiveGap / MAX_TIME_BONUS_DAYS) * TIME_BONUS_MULTIPLIER;
+    } else {
+      // Fallback: give a small default bonus when no due date is provided
+      timeBonus = TIME_BONUS_MULTIPLIER * DEFAULT_TIME_BONUS;
+    }
+    
+    // Combine all multipliers
+    const totalMultiplier = 1 + STREAK_MULTIPLIER * streakBonus + timeBonus;
+    const reward = wager * totalMultiplier;
     
     return Math.round(reward);
   }

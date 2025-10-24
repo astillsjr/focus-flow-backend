@@ -93,7 +93,7 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
         failedBets: number;
         pendingBets: number;
       }).points, 
-      101,
+      102,
       "Incorrect user stats fetch."
     );
     assertEquals(
@@ -115,6 +115,77 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     assertEquals((history as any[]).length >= 1, true);
   });
 
+  await t.step("Action: time bonus rewards earlier bet deadlines", async () => {
+    const user2 = "user:Bob" as ID;
+    await bets.initializeBettor({ user: user2 });
+    await bets.users.updateOne({ _id: user2 }, { $set: { points: 100 } });
+  
+    const taskWithDue = "task:TimedTask" as ID;
+    const now = Date.now();
+    const betDeadline = new Date(now + 24 * 60 * 60 * 1000); // 1 day from now
+    const taskDueDate = new Date(now + 15 * 24 * 60 * 60 * 1000); // 15 days from now
+  
+    // Place bet with task due date (should get max time bonus)
+    await bets.placeBet({
+      user: user2,
+      task: taskWithDue,
+      wager: 20,
+      deadline: betDeadline,
+      taskDueDate: taskDueDate,
+    });
+  
+    const pointsAfterBet = (await bets.users.findOne({ _id: user2 }))!.points;
+    assertEquals(pointsAfterBet, 80, "Points should be deducted after bet.");
+  
+    // Resolve bet successfully
+    const resolved = await bets.resolveBet({
+      user: user2,
+      task: taskWithDue,
+      completionTime: new Date(now + 1000),
+    });
+  
+    assertNotEquals("error" in resolved, true, "Bet resolution should succeed.");
+    
+    const pointsAfterResolve = (await bets.users.findOne({ _id: user2 }))!.points;
+    
+    // With 14-day gap, should get full time bonus (25%)
+    // reward ≈ 20 * (1 + 0.15 * streakBonus + 0.25) ≈ 26
+    assertEquals(
+      pointsAfterResolve > 104,
+      true,
+      "Time bonus should increase reward for early bet deadline."
+    );
+  });
+  
+  await t.step("Action: bet deadline must be before task due date", async () => {
+    const user3 = "user:Charlie" as ID;
+    await bets.initializeBettor({ user: user3 });
+    await bets.users.updateOne({ _id: user3 }, { $set: { points: 100 } });
+  
+    const now = Date.now();
+    const badDeadline = new Date(now + 10 * 24 * 60 * 60 * 1000); // 10 days
+    const earlierDueDate = new Date(now + 5 * 24 * 60 * 60 * 1000); // 5 days
+  
+    const result = await bets.placeBet({
+      user: user3,
+      task: "task:Invalid" as ID,
+      wager: 10,
+      deadline: badDeadline,
+      taskDueDate: earlierDueDate,
+    });
+  
+    assertEquals(
+      "error" in result,
+      true,
+      "Should fail when bet deadline is after task due date."
+    );
+    assertEquals(
+      (result as { error: string }).error,
+      "Bet deadline must be before task due date",
+      "Correct error message for invalid deadline."
+    );
+  });
+  
   await t.step("Action: initializng bettors prohibits duplicate users", async () => {
     const duplicate = await bets.initializeBettor({ user });
     assertEquals(
