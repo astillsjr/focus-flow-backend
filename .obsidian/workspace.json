@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "cad5de3184c7acec",
+        "id": "69dfa49611110269",
         "type": "tabs",
         "children": [
           {
-            "id": "a195526758345ba2",
+            "id": "a153ac2b3aae4de6",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -169,10 +169,22 @@
       "bases:Create new base": false
     }
   },
-  "active": "a195526758345ba2",
+  "active": "a153ac2b3aae4de6",
   "lastOpenFiles": [
+    "api-extraction.md",
+    "context/design/tools/api-extraction-from-code.md/steps/response.5900142f.md",
+    "context/design/tools/api-extraction-from-code.md/steps/_.90fe2e28.md",
+    "context/design/tools/api-extraction-from-code.md/steps/_.da164f86.md",
+    "context/design/tools/api-extraction-from-code.md/steps/file.2f4ca11c.md",
+    "context/design/tools/api-extraction-from-code.md/steps/_.18488316.md",
+    "context/design/tools/api-extraction-from-code.md/steps/_.9c81547e.md",
+    "context/design/tools/api-extraction-from-code.md/steps/Generic Parameters.7993f9ee.md",
+    "context/design/tools/api-extraction-from-code.md/steps/_.a6edd866.md",
+    "context/deno.json/20251022_185228.2f4ca11c.md",
     "design/tools/api-extraction-from-spec.md",
+    "README.md",
     "design/tools/api-extraction-from-code.md",
+    "design/concepts/UserAuthentication/UserAuthentication.md",
     "design/background/testing-concepts.md",
     "design/concepts/UserAuthentication/testing.md",
     "context/design/concepts/UserAuthentication/testing.md/20251016_204037.5663cbac.md",
@@ -185,19 +197,7 @@
     "context/design/concepts/UserAuthentication/testing.md/steps/response.ac1eb113.md",
     "context/design/concepts/UserAuthentication/testing.md/20251016_203750.4c3299da.md",
     "context/design/concepts/UserAuthentication/testing.md/steps/prompt.cdb7b2a8.md",
-    "context/design/concepts/UserAuthentication/testing.md/20251016_203631.d8476227.md",
-    "context/design/concepts/UserAuthentication/testing.md/steps/response.fcaceffc.md",
-    "context/design/concepts/UserAuthentication/testing.md/20251016_203607.95d72fed.md",
-    "context/design/concepts/UserAuthentication/testing.md/steps/prompt.0f46c467.md",
-    "context/design/concepts/UserAuthentication/testing.md/steps/_.3eb68380.md",
     "context/design/concepts/UserAuthentication/testing.md/steps",
-    "context/design/concepts/UserAuthentication/testing.md",
-    "README.md",
-    "design/background/concept-specifications.md",
-    "design/concepts/EmotionLogger/testing.md",
-    "design/concepts/MicroBet/testing.md",
-    "design/concepts/NudgeEngine/testing.md",
-    "design/concepts/TaskManager/testing.md",
     "src/utils/emotions.ts",
     "context/design/concepts/TaskManager/implementation.md/steps",
     "context/design/concepts/TaskManager",

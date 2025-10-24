@@ -36,7 +36,7 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
     );
 
     // 3. Log Out
-    const logout = await auth.logout(refreshToken);
+    const logout = await auth.logout({ refreshToken });
     assertNotEquals(
       "error" in logout,
       true,
@@ -137,14 +137,14 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
       email: "logan@example.com",
     }) as { refreshToken: string };
 
-    const logout = await auth.logout(refreshToken);
+    const logout = await auth.logout({ refreshToken });
     assertEquals(
       "error" in logout, 
       false,
       "Logout should succeed."
     );
 
-    const refreshAttempt = await auth.refreshAccessToken(refreshToken);
+    const refreshAttempt = await auth.refreshAccessToken({ refreshToken });
     assertEquals(
       "error" in refreshAttempt, 
       true, 
@@ -200,11 +200,11 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
     );
     const { accessToken, refreshToken: _refreshToken } = registration as { accessToken: string, refreshToken: string };
 
-    const info = await auth.getUserInfo(accessToken);
+    const info = await auth.getUserInfo({ accessToken });
     if (!("user" in info)) throw new Error(`getUserInfo failed: ${info.error}`);
     assertEquals(info.user.username, "alice");
 
-    const result = await auth.getUserInfo("bad.token.value");
+    const result = await auth.getUserInfo({ accessToken: "bad.token.value" });
     assertEquals(
       "error" in result, 
       true,

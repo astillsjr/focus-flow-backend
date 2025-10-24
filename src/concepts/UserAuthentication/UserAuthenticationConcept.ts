@@ -117,7 +117,7 @@ export default class UserAuthenticationConcept {
    * @effects Invalidates the user's current refresh token, ending their session.
    */
   public async logout(
-    refreshToken: string
+    { refreshToken }: { refreshToken: string }
   ): Promise<Empty | { error: string }> {
     const userId = this.verifyToken(refreshToken);
     if (!userId) return { error: "Invalid or expired refresh token" };
@@ -185,7 +185,7 @@ export default class UserAuthenticationConcept {
    * @effects Generates and returns a new short-lived access token.
    */
   public async refreshAccessToken(
-    refreshToken: string
+    { refreshToken }: { refreshToken: string }
   ): Promise<{ accessToken: string } | { error: string }> {
     const userId = this.verifyToken(refreshToken);
     if (!userId) return { error: "Invalid or expired refresh token" };
@@ -205,7 +205,7 @@ export default class UserAuthenticationConcept {
    * @effects Returns the user's ID, username, and email address.
    */
   public async getUserInfo(
-    accessToken: string
+    { accessToken }:  { accessToken: string }
   ): Promise<{ user: { id: User; username: string; email: string } } | { error: string }> {
     const userId = this.verifyToken(accessToken);
     if (!userId) return { error: "Invalid or expired token" };

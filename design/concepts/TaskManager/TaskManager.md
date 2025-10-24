@@ -7,14 +7,14 @@
   * A set of `Tasks` with
     * a `user` of type `User`
     * a `title` of type `String`
-    * a `description` of type `String`
+    * a `description?` of type `String`
     * a `createdAt` of type `Date`
     * a `startedAt?` of type `Date`
     * a `completedAt?` of type `Date`
     * a `dueDate?` of type `Date`
     
 * **actions**:
-  * `createTask (user: User, title: String, description: String, dueDate?: Date): (task: Task)`
+  * `createTask (user: User, title: String, description?: String, dueDate?: Date): (task: Task)`
     * **requires**: The title must be unique and non-empty. If provided, the due date must be in the future.
     * **effects**: Inserts a new task record for the user and returns its ID.
   * `updateTask (user: User, task: Task, title?: String, description?: String, dueDate?: Date): (task: Task)`

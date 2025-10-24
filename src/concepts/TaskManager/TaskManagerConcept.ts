@@ -16,7 +16,7 @@ export type TaskStatus = "pending" | "in-progress" | "completed";
  * a set of Tasks with
  *   a user User
  *   a title String
- *   a description String
+ *   a description? String
  *   a createdAt Date
  *   a startedAt? Date
  *   a completedAt? Date
@@ -26,7 +26,7 @@ interface TaskDoc {
   _id: Task;
   user: User;
   title: string;
-  description: string;
+  description?: string;
   createdAt: Date;
   startedAt?: Date;
   completedAt?: Date;
@@ -62,7 +62,7 @@ export default class TaskManagerConcept {
     params: { 
       user: User; 
       title: string; 
-      description: string; 
+      description?: string; 
       dueDate?: Date;
     }
   ): Promise<{ task: Task } | { error: string }> {
@@ -315,7 +315,9 @@ export default class TaskManagerConcept {
    * Determines the current status of a task.
    * @effects Returns `"pending"`, `"in-progress"`, or `"completed"` based on task state.
    */
-  public getTaskStatus(task: TaskDoc): TaskStatus {
+  public getTaskStatus(
+    { task }: { task: TaskDoc }
+  ): TaskStatus {
     if (task.completedAt) return "completed";
     if (task.startedAt) return "in-progress";
     return "pending";

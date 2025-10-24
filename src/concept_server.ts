@@ -18,6 +18,38 @@ const BASE_URL = flags.baseUrl;
 const CONCEPTS_DIR = "src/concepts";
 
 /**
+ * Recursively parses ISO date strings in an object and converts them to Date objects.
+ * This handles date serialization from the frontend (e.g., new Date().toISOString()).
+ */
+function parseDatesInBody(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (typeof obj === 'string') {
+    // Check if it's an ISO date string
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
+    if (isoDateRegex.test(obj)) {
+      const date = new Date(obj);
+      return isNaN(date.getTime()) ? obj : date;
+    }
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(parseDatesInBody);
+  }
+  
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = parseDatesInBody(value);
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
+/**
  * Main server function to initialize DB, load concepts, and start the server.
  */
 async function main() {
@@ -76,7 +108,8 @@ async function main() {
         app.post(route, async (c) => {
           try {
             const body = await c.req.json().catch(() => ({})); // Handle empty body
-            const result = await instance[methodName](body);
+            const parsedBody = parseDatesInBody(body); // Convert ISO date strings to Date objects
+            const result = await instance[methodName](parsedBody);
             return c.json(result);
           } catch (e) {
             console.error(`Error in ${conceptName}.${methodName}:`, e);
