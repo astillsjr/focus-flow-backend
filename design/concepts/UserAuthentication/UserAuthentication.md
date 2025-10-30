@@ -9,7 +9,8 @@
     * a `hashedPassword` of type `String`
     * a `email` of type `String`
     * a `createdAt` of type `Date`
-    * a `refreshToken` of type `String`
+    * a `refreshToken` of type `String?`  
+      (present while logged in; absent when logged out)
 * **actions**:
   * `register (username: String, password: String, email: String): (accessToken: string, refreshToken: string)`
     * **requires**: The provided email and username must not already exist. The email must be in valid format.
@@ -25,7 +26,7 @@
     * **effects**: Updates the user's stored password hash to the new password.
   * `deleteAccount (accessToken: string, password: string)`
     * **requires**: A valid access token must be provided. The provided password matches the user's current password.
-    * **effects**: Permanently removes the user's account and associated data.
+    * **effects**: Permanently removes the user's account.
   * `refreshAccessToken (refreshToken: string): (accessToken: string)`
     * **requires**: A valid and active refresh token must be provided.
     * **effects**: Generates and returns a new short-lived access token.

@@ -37,7 +37,6 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
       false,
       "A new nudge should not be marked as triggered"
     );
-    assertEquals(created.canceled, false);
 
     // 2. Wait briefly so delivery time passes
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -109,7 +108,7 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
     assertEquals((failedSchedule as { error: string }).error, "Delivery time cannot be in the past");
   });
 
-  await t.step("Action: canceling a nudge prevents its trigger", async () => {
+  await t.step("Action: canceling a nudge deletes it and prevents its trigger", async () => {
     const task = "task:Essay 4" as ID;
 
     const delivery = new Date(Date.now() + 500);
@@ -131,6 +130,14 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
       "Nudge canceling should not fail.",
     );
 
+    // Verify the nudge was deleted
+    const deletedNudge = await nudgeEngine.nudges.findOne({ user, task });
+    assertEquals(
+      deletedNudge,
+      null,
+      "Canceled nudge should be deleted from the database."
+    );
+
     const failedTrigger = await nudgeEngine.nudgeUser({
       user,
       task,
@@ -141,12 +148,12 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
     assertEquals(
       "error" in failedTrigger, 
       true, 
-      "Should fail when attempting to trigger a canceled task."
+      "Should fail when attempting to trigger a deleted nudge."
     );
-    assertEquals((failedTrigger as { error: string }).error, "Nudge has been canceled");
+    assertEquals((failedTrigger as { error: string }).error, "Nudge does not exist for this task");
   });
 
-  await t.step("Action: canceling fails on a canceled/triggered nudge", async () => {
+  await t.step("Action: canceling fails on a deleted or triggered nudge", async () => {
     let task = "task:Essay 5.1" as ID;
 
     let delivery = new Date(Date.now() + 500);
@@ -172,9 +179,9 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
     assertEquals(
       "error" in failedCancel1, 
       true, 
-      "Should fail when attempting to cancel a canceled task."
+      "Should fail when attempting to cancel a deleted nudge."
     );
-    assertEquals((failedCancel1 as { error: string }).error, "Nudge has already been canceled");
+    assertEquals((failedCancel1 as { error: string }).error, "Nudge for this task does not exist");
 
     task = "task:Essay 5.2" as ID;
 

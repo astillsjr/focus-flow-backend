@@ -162,7 +162,7 @@ export default class UserAuthenticationConcept {
    * Deletes a user's account.
    * @requires A valid access token must be provided. 
    *           The provided password must match the user's current password.
-   * @effects Permanently removes the user's account and associated data.
+   * @effects Permanently removes the user's account.
    */
   public async deleteAccount(
     { accessToken, password }: { accessToken: string, password: string },

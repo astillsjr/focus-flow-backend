@@ -9,14 +9,13 @@
     * a `task` of type `Task`
     * a `deliveryTime` of type `Date`
     * a `triggered` of type `Boolean`
-    * a `canceled` of type `Boolean`
 * **actions**:
   * `scheduleNudge (user: User, task: Task, deliveryTime: Date): (nudge: Nudge)`
     * **requires**: No existing nudge must exist for the same task. The delivery time must be in the future.
     * **effects**: Creates a new nudge record associated with the task and user.
   * `cancelNudge (user: User, task: Task)`
-    * **requires**: The nudge must exist and must not already be triggered or canceled.
-    * **effects**: Marks the nudge as canceled, preventing future delivery.
+    * **requires**: The nudge must exist and must not already be triggered.
+    * **effects**: Deletes the nudge, preventing future delivery.
   * `deleteUserNudges (user: User)`
     * **effects**: Removes every nudge targeted at the specified user.
   * `nudgeUser (user: User, task: Task, title: String, description: String, recentEmotions: Emotion[]): (message: String, nudge: Nudge)`
@@ -25,7 +24,7 @@
   * `getNudge (user: User, task: Task): (nudge: NudgeDoc)`
     * **requires**: A nudge must exist for the specified user and task.
     * **effects**: Returns the matching nudge document.
-  * `getUserNudges (user: User, status?: "pending" | "triggered" | "canceled", limit?: Number): (nudges: NudgeDoc[])`
-    * **effects**: Returns the user's nudges filtered by status (pending, triggered, or canceled).
+  * `getUserNudges (user: User, status?: "pending" | "triggered", limit?: Number): (nudges: NudgeDoc[])`
+    * **effects**: Returns the user's nudges filtered by status (pending or triggered).
   * `getReadyNudges (user: User): (nudges: NudgeDoc[])`
-    * **effects**: Returns nudges whose delivery time has arrived and are not yet triggered or canceled. 
+    * **effects**: Returns nudges whose delivery time has arrived and are not yet triggered. 

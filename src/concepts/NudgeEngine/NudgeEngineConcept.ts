@@ -25,7 +25,6 @@ type Nudge = ID;
  *   a task Task
  *   a deliveryTime Date
  *   a triggered Boolean
- *   a canceled Boolean 
  */
 interface NudgeDoc {
   _id: Nudge;
@@ -33,7 +32,6 @@ interface NudgeDoc {
   task: Task;
   deliveryTime: Date;
   triggered: boolean;
-  canceled: boolean;
 }
 
 /**
@@ -73,7 +71,6 @@ export default class NudgeEngineConcept {
       task,
       deliveryTime: new Date(deliveryTime),
       triggered: false,
-      canceled: false,
     };
 
     try {
@@ -89,8 +86,8 @@ export default class NudgeEngineConcept {
 
   /**
    * Cancels a scheduled nudge.
-   * @requires The nudge must exist and must not already be triggered or canceled.
-   * @effects Marks the nudge as canceled, preventing future delivery.
+   * @requires The nudge must exist and must not already be triggered.
+   * @effects Deletes the nudge from the database, preventing future delivery.
    */
   public async cancelNudge(
     { user, task }: { user: User, task: Task },
@@ -99,12 +96,8 @@ export default class NudgeEngineConcept {
     if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
 
     if (nudgeDoc.triggered) return { error: "Nudge has already been triggered" };
-    if (nudgeDoc.canceled) return { error: "Nudge has already been canceled" };
 
-    await this.nudges.updateOne(
-      { _id: nudgeDoc._id },
-      { $set: { canceled: true } }
-    );
+    await this.nudges.deleteOne({ _id: nudgeDoc._id });
 
     return {};
   }
@@ -124,7 +117,7 @@ export default class NudgeEngineConcept {
   /**
    * Sends a motivational nudge to a user.
    * @requires The current time must be later than the nudge's delivery time.
-   *           The nudge must not already be triggered or canceled.
+   *           The nudge must not already be triggered.
    * @effects Generates a motivational message using the AI model and marks the nudge as triggered.
    */
   public async nudgeUser(
@@ -143,7 +136,6 @@ export default class NudgeEngineConcept {
       user,
       task,
       triggered: false,
-      canceled: false,
       deliveryTime: { $lte: now },
     });
 
@@ -152,7 +144,6 @@ export default class NudgeEngineConcept {
 
       if (!failedNudge) return { error: "Nudge does not exist for this task" };
       if (failedNudge.triggered) return { error: "Nudge has already been triggered" };
-      if (failedNudge.canceled) return { error: "Nudge has been canceled" };
       if (failedNudge.deliveryTime.getTime() > now.getTime()) return { error: "Nudge delivery time has not arrived yet" };
 
       return { error: "Unknown error triggering nudge" };
@@ -206,7 +197,7 @@ export default class NudgeEngineConcept {
 
   /**
    * Retrieves all nudges for a user with optional filtering.
-   * @effects Returns the user's nudges filtered by status (pending, triggered, or canceled).
+   * @effects Returns the user's nudges filtered by status (pending or triggered).
    */
   public async getUserNudges(
     { 
@@ -215,7 +206,7 @@ export default class NudgeEngineConcept {
       limit = 50 
     }: { 
       user: User; 
-      status?: "pending" | "triggered" | "canceled";
+      status?: "pending" | "triggered";
       limit?: number;
     }
   ): Promise<NudgeDoc[]> {
@@ -223,11 +214,8 @@ export default class NudgeEngineConcept {
 
     if (status === "pending") {
       filter.triggered = false;
-      filter.canceled = false;
     } else if (status === "triggered") {
       filter.triggered = true;
-    } else if (status === "canceled") {
-      filter.canceled = true;
     }
 
     return await this.nudges
@@ -239,7 +227,7 @@ export default class NudgeEngineConcept {
 
   /**
    * Retrieves all ready-to-deliver nudges for a user.
-   * @effects Returns nudges whose delivery time has arrived and are not yet triggered or canceled.
+   * @effects Returns nudges whose delivery time has arrived and are not yet triggered.
    */
   public async getReadyNudges(
     { user }: { user: User }
@@ -249,7 +237,6 @@ export default class NudgeEngineConcept {
       .find({
         user,
         triggered: false,
-        canceled: false,
         deliveryTime: { $lte: now }
       })
       .sort({ deliveryTime: 1 })

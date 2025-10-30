@@ -162,7 +162,7 @@ This document provides comprehensive API documentation for all concepts in the F
 - The provided password must match the user's current password.
 
 **Effects:**
-- Permanently removes the user's account and associated data.
+- Permanently removes the user's account.
 
 **Request Body:**
 ```json
@@ -621,10 +621,10 @@ This document provides comprehensive API documentation for all concepts in the F
 **Description:** Cancels a scheduled nudge.
 
 **Requirements:**
-- The nudge must exist and must not already be triggered or canceled.
+- The nudge must exist and must not already be triggered.
 
 **Effects:**
-- Marks the nudge as canceled, preventing future delivery.
+- Deletes the nudge from the database, preventing future delivery.
 
 **Request Body:**
 ```json
@@ -675,7 +675,7 @@ This document provides comprehensive API documentation for all concepts in the F
 
 **Requirements:**
 - The current time must be later than the nudge's delivery time.
-- The nudge must not already be triggered or canceled.
+- The nudge must not already be triggered.
 
 **Effects:**
 - Generates a motivational message using the AI model and marks the nudge as triggered.
@@ -733,8 +733,7 @@ This document provides comprehensive API documentation for all concepts in the F
   "user": "string",
   "task": "string",
   "deliveryTime": "Date",
-  "triggered": "boolean",
-  "canceled": "boolean"
+  "triggered": "boolean"
 }
 ```
 
@@ -752,13 +751,13 @@ This document provides comprehensive API documentation for all concepts in the F
 **Description:** Retrieves all nudges for a user with optional filtering.
 
 **Effects:**
-- Returns the user's nudges filtered by status (pending, triggered, or canceled).
+- Returns the user's nudges filtered by status (pending or triggered).
 
 **Request Body:**
 ```json
 {
   "user": "string",
-  "status": "string (optional: 'pending' | 'triggered' | 'canceled')",
+  "status": "string (optional: 'pending' | 'triggered')",
   "limit": "number (optional, default: 50)"
 }
 ```
@@ -771,8 +770,7 @@ This document provides comprehensive API documentation for all concepts in the F
     "user": "string",
     "task": "string",
     "deliveryTime": "Date",
-    "triggered": "boolean",
-    "canceled": "boolean"
+    "triggered": "boolean"
   }
 ]
 ```
@@ -784,7 +782,7 @@ This document provides comprehensive API documentation for all concepts in the F
 **Description:** Retrieves all ready-to-deliver nudges for a user.
 
 **Effects:**
-- Returns nudges whose delivery time has arrived and are not yet triggered or canceled.
+- Returns nudges whose delivery time has arrived and are not yet triggered.
 
 **Request Body:**
 ```json
@@ -801,8 +799,7 @@ This document provides comprehensive API documentation for all concepts in the F
     "user": "string",
     "task": "string",
     "deliveryTime": "Date",
-    "triggered": "boolean",
-    "canceled": "boolean"
+    "triggered": "boolean"
   }
 ]
 ```
