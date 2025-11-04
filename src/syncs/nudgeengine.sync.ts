@@ -217,4 +217,3 @@ export const GetReadyNudgesResponse: Sync = ({ request, nudges }) => ({
   ),
   then: actions([Requesting.respond, { request, nudges }]),
 });
-
