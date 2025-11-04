@@ -102,14 +102,29 @@ export const PlaceBetRequest: Sync = ({ request, accessToken, task, wager, deadl
 
 export const PlaceBetWithUser: Sync = ({ request, user, userId, task, wager, deadline, taskDueDate }) => ({
   when: actions(
-    [Requesting.request, { path: "/MicroBet/placeBet", task }, { request }],
+    [Requesting.request, { path: "/MicroBet/placeBet", task, wager, deadline, taskDueDate }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
   where: (frames) => {
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert deadline string to Date if it's a string
+      if (deadline in newFrame) {
+        const deadlineValue = newFrame[deadline];
+        if (typeof deadlineValue === 'string') {
+          newFrame[deadline] = new Date(deadlineValue);
+        }
+      }
+      // Convert taskDueDate string to Date if it's a string (and present)
+      if (taskDueDate in newFrame && newFrame[taskDueDate] !== null && newFrame[taskDueDate] !== undefined) {
+        const taskDueDateValue = newFrame[taskDueDate];
+        if (typeof taskDueDateValue === 'string') {
+          newFrame[taskDueDate] = new Date(taskDueDateValue);
+        }
+      }
+      return newFrame;
     });
   },
   then: actions([MicroBet.placeBet, { user: userId, task, wager, deadline, taskDueDate }]),

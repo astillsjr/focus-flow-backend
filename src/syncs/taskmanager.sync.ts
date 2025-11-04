@@ -10,26 +10,88 @@ import { actions, Sync } from "@engine";
 // CREATE TASK
 // ============================================================================
 
+// Request sync for createTask without dueDate
 export const CreateTaskRequest: Sync = ({ request, accessToken, title, description, dueDate }) => ({
   when: actions([
     Requesting.request,
     { path: "/TaskManager/createTask", accessToken, title, description, dueDate },
     { request },
   ]),
+  where: (frames) => {
+    // Only match if dueDate is null or undefined
+    return frames.filter((frame) => {
+      const dueDateValue = frame[dueDate];
+      return dueDateValue === null || dueDateValue === undefined;
+    });
+  },
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
+// Request sync for createTask with dueDate
+export const CreateTaskRequestWithDueDate: Sync = ({ request, accessToken, title, description, dueDate }) => ({
+  when: actions([
+    Requesting.request,
+    { path: "/TaskManager/createTask", accessToken, title, description, dueDate },
+    { request },
+  ]),
+  where: (frames) => {
+    // Only match if dueDate is NOT null or undefined
+    return frames.filter((frame) => {
+      const dueDateValue = frame[dueDate];
+      return dueDateValue !== null && dueDateValue !== undefined;
+    });
+  },
+  then: actions([UserAuthentication.getUserInfo, { accessToken }]),
+});
+
+// Sync for createTask without dueDate
 export const CreateTaskWithUser: Sync = ({ request, user, userId, title, description, dueDate }) => ({
   when: actions(
-    [Requesting.request, { path: "/TaskManager/createTask" }, { request }],
+    [Requesting.request, { path: "/TaskManager/createTask", title, description, dueDate }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
   where: (frames) => {
-    return frames.map((frame) => {
-      const userObj = frame[user] as { id: string } | undefined;
-      if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
-    });
+    return frames
+      .filter((frame) => {
+        // Only match if dueDate is null or undefined
+        const dueDateValue = frame[dueDate];
+        return dueDateValue === null || dueDateValue === undefined;
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        return { ...frame, [userId]: userObj.id };
+      });
+  },
+  then: actions([TaskManager.createTask, { user: userId, title, description }]),
+});
+
+// Sync for createTask with dueDate
+export const CreateTaskWithUserAndDueDate: Sync = ({ request, user, userId, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/createTask", title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if dueDate is NOT null or undefined
+        const dueDateValue = frame[dueDate];
+        return dueDateValue !== null && dueDateValue !== undefined;
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        const newFrame = { ...frame, [userId]: userObj.id };
+        // Convert dueDate string to Date if it's a string
+        if (dueDate in newFrame) {
+          const dtValue = newFrame[dueDate];
+          if (typeof dtValue === 'string') {
+            newFrame[dueDate] = new Date(dtValue);
+          }
+        }
+        return newFrame;
+      });
   },
   then: actions([TaskManager.createTask, { user: userId, title, description, dueDate }]),
 });
@@ -63,19 +125,234 @@ export const UpdateTaskRequest: Sync = ({ request, accessToken, task, title, des
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
+// Sync for updateTask without optional parameters
 export const UpdateTaskWithUser: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
   when: actions(
-    [Requesting.request, { path: "/TaskManager/updateTask", task }, { request }],
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if all optional parameters are null or undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue === null || titleValue === undefined) &&
+               (descriptionValue === null || descriptionValue === undefined) &&
+               (dueDateValue === null || dueDateValue === undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        return { ...frame, [userId]: userObj.id };
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task }]),
+});
+
+// Sync for updateTask with all optional parameters
+export const UpdateTaskWithUserAndAll: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
   where: (frames) => {
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert dueDate string to Date if it's a string
+      if (dueDate in newFrame) {
+        const dtValue = newFrame[dueDate];
+        if (typeof dtValue === 'string') {
+          newFrame[dueDate] = new Date(dtValue);
+        }
+      }
+      return newFrame;
     });
   },
   then: actions([TaskManager.updateTask, { user: userId, task, title, description, dueDate }]),
+});
+
+// Sync for updateTask with title only
+export const UpdateTaskWithUserAndTitle: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if title is present, but description and dueDate are null/undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue !== null && titleValue !== undefined) &&
+               (descriptionValue === null || descriptionValue === undefined) &&
+               (dueDateValue === null || dueDateValue === undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        return { ...frame, [userId]: userObj.id };
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, title }]),
+});
+
+// Sync for updateTask with description only
+export const UpdateTaskWithUserAndDescription: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if description is present, but title and dueDate are null/undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue === null || titleValue === undefined) &&
+               (descriptionValue !== null && descriptionValue !== undefined) &&
+               (dueDateValue === null || dueDateValue === undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        return { ...frame, [userId]: userObj.id };
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, description }]),
+});
+
+// Sync for updateTask with dueDate only
+export const UpdateTaskWithUserAndDueDate: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if dueDate is present (and not null), but title and description are null/undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue === null || titleValue === undefined) &&
+               (descriptionValue === null || descriptionValue === undefined) &&
+               (dueDateValue !== null && dueDateValue !== undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        const newFrame = { ...frame, [userId]: userObj.id };
+        // Convert dueDate string to Date if it's a string
+        if (dueDate in newFrame) {
+          const dtValue = newFrame[dueDate];
+          if (typeof dtValue === 'string') {
+            newFrame[dueDate] = new Date(dtValue);
+          }
+        }
+        return newFrame;
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, dueDate }]),
+});
+
+// Sync for updateTask with title and description
+export const UpdateTaskWithUserAndTitleAndDescription: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if title and description are present, but dueDate is null/undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue !== null && titleValue !== undefined) &&
+               (descriptionValue !== null && descriptionValue !== undefined) &&
+               (dueDateValue === null || dueDateValue === undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        return { ...frame, [userId]: userObj.id };
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, title, description }]),
+});
+
+// Sync for updateTask with title and dueDate
+export const UpdateTaskWithUserAndTitleAndDueDate: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if title and dueDate are present, but description is null/undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue !== null && titleValue !== undefined) &&
+               (descriptionValue === null || descriptionValue === undefined) &&
+               (dueDateValue !== null && dueDateValue !== undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        const newFrame = { ...frame, [userId]: userObj.id };
+        // Convert dueDate string to Date if it's a string
+        if (dueDate in newFrame) {
+          const dtValue = newFrame[dueDate];
+          if (typeof dtValue === 'string') {
+            newFrame[dueDate] = new Date(dtValue);
+          }
+        }
+        return newFrame;
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, title, dueDate }]),
+});
+
+// Sync for updateTask with description and dueDate
+export const UpdateTaskWithUserAndDescriptionAndDueDate: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
+  when: actions(
+    [Requesting.request, { path: "/TaskManager/updateTask", task, title, description, dueDate }, { request }],
+    [UserAuthentication.getUserInfo, {}, { user }],
+  ),
+  where: (frames) => {
+    return frames
+      .filter((frame) => {
+        // Only match if description and dueDate are present, but title is null/undefined
+        const titleValue = frame[title];
+        const descriptionValue = frame[description];
+        const dueDateValue = frame[dueDate];
+        return (titleValue === null || titleValue === undefined) &&
+               (descriptionValue !== null && descriptionValue !== undefined) &&
+               (dueDateValue !== null && dueDateValue !== undefined);
+      })
+      .map((frame) => {
+        const userObj = frame[user] as { id: string } | undefined;
+        if (!userObj) return frame;
+        const newFrame = { ...frame, [userId]: userObj.id };
+        // Convert dueDate string to Date if it's a string
+        if (dueDate in newFrame) {
+          const dtValue = newFrame[dueDate];
+          if (typeof dtValue === 'string') {
+            newFrame[dueDate] = new Date(dtValue);
+          }
+        }
+        return newFrame;
+      });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, description, dueDate }]),
 });
 
 export const UpdateTaskResponse: Sync = ({ request, task }) => ({

@@ -330,15 +330,17 @@ export default class MicroBetConcept {
    */
   public async getRecentActivity(
     { user, limit = 10 }: { user: User; limit?: number }
-  ): Promise<BetDoc[] | { error: string }> {
+  ): Promise<{ bets: BetDoc[] } | { error: string }> {
     const userProfile = await this.users.findOne({ _id: user });
     if (!userProfile) return { error: "User profile not found" };
 
-    return await this.bets
+    const bets = await this.bets
       .find({ user })
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray();
+    
+    return { bets };
   }
 
   /**

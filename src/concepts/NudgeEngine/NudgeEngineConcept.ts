@@ -209,7 +209,7 @@ export default class NudgeEngineConcept {
       status?: "pending" | "triggered";
       limit?: number;
     }
-  ): Promise<NudgeDoc[]> {
+  ): Promise<{ nudges: NudgeDoc[] }> {
     const filter: Record<string, unknown> = { user };
 
     if (status === "pending") {
@@ -218,11 +218,12 @@ export default class NudgeEngineConcept {
       filter.triggered = true;
     }
 
-    return await this.nudges
+    const nudges = await this.nudges
       .find(filter)
       .sort({ deliveryTime: -1 })
       .limit(limit)
       .toArray();
+    return { nudges };
   }
 
   /**
