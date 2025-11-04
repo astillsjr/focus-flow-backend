@@ -47,6 +47,11 @@ export const exclusions: Array<string> = [
   "/api/UserAuthentication/getUserInfo",
   "/api/UserAuthentication/changePassword",
   "/api/UserAuthentication/deleteAccount",
+  "/api/UserAuthentication/hasActiveSession",
+  "/api/UserAuthentication/getLastSeenNudgeTimestamp",
+  "/api/UserAuthentication/getLastSeenBetTimestamp",
+  "/api/UserAuthentication/updateLastSeenNudgeTimestamp",
+  "/api/UserAuthentication/updateLastSeenBetTimestamp",
 
   // TaskManager - All actions require user ownership verification
   "/api/TaskManager/createTask",
@@ -69,6 +74,7 @@ export const exclusions: Array<string> = [
   "/api/MicroBet/getBet",
   "/api/MicroBet/getActiveBets",
   "/api/MicroBet/getExpiredBets",
+  "/api/MicroBet/getRecentlyResolvedBets",
   "/api/MicroBet/getUserProfile",
   "/api/MicroBet/getRecentActivity",
 
@@ -90,6 +96,9 @@ export const exclusions: Array<string> = [
   "/api/NudgeEngine/getNudge",
   "/api/NudgeEngine/getUserNudges",
   "/api/NudgeEngine/getReadyNudges",
+  "/api/NudgeEngine/getReadyNudgesSince",
+  "/api/NudgeEngine/getNewTriggeredNudges",
+  "/api/NudgeEngine/getLastTriggeredTimestamp",
 
   // Private helper methods (not meant to be public routes)
   "/api/EmotionLogger/logPhase",
