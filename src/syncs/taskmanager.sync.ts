@@ -678,15 +678,12 @@ export const GetTaskStatusResponse: Sync = ({ request, task, status }) => ({
     [Requesting.request, { path: "/TaskManager/getTaskStatus" }, { request }],
     [TaskManager.getTask, {}, { task }],
   ),
-  where: async (frames) => {
-    // Compute status from task properties
-    // task is a symbol variable, and frame[task] gives us the task document
+  where: (frames) => {
+    // Use TaskManager.getTaskStatus method to compute status from task document
     return frames.map((frame) => {
-      const taskDoc = frame[task] as { completedAt?: Date; startedAt?: Date } | undefined;
+      const taskDoc = frame[task] as Parameters<typeof TaskManager.getTaskStatus>[0]["task"] | undefined;
       if (!taskDoc) return frame;
-      const computedStatus = taskDoc.completedAt 
-        ? "completed" 
-        : (taskDoc.startedAt ? "in-progress" : "pending");
+      const computedStatus = TaskManager.getTaskStatus({ task: taskDoc });
       return { ...frame, [status]: computedStatus };
     });
   },

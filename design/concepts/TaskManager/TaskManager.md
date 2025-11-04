@@ -36,5 +36,5 @@
     * **effects**: Returns the corresponding task document.
   * `getTasks (user: User, page?: Number, limit?: Number, status?: TaskStatus, search?: String, sortBy?: keyof TaskDoc, sortOrder?: 1 | -1): (tasks: TaskDoc[], total: Number, page: Number, totalPages: Number)`
     * **effects**: Returns tasks matching the provided filters and pagination parameters.
-  * `getTaskStatus (task: TaskDoc): (status: TaskStatus)`
+  * `getTaskStatus ({ task: TaskDoc }): (status: TaskStatus)`
     * **effects**: Returns `"pending"`, `"in-progress"`, or `"completed"` based on task state.

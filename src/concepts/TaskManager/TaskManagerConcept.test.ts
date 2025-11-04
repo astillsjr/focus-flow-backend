@@ -92,7 +92,7 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
 
     const second = await tasks.createTask({
       user,
-      title: "Plan rough draph",
+      title: "Plan rough draft",
       description: "Write a project rough draft",
     });
     const { task: dupExample } = second as { task: ID };
@@ -122,7 +122,7 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
       true, 
       "Should fail when updating task with duplicate name."
     );
-    assertEquals((dupTitleCreation as { error: string }).error, "Title must be unique");
+    assertEquals((dupTitleUpdate as { error: string }).error, "Title must be unique");
 
     // Attempt empty title
     const empty = await tasks.createTask({
@@ -204,46 +204,80 @@ Deno.test("TaskManager Concept - Operational Principle & Scenarios", async (t) =
     assertEquals((imaginaryTask as { error: string }).error, "Task does not exist");
   });
 
+  await t.step("Action: deleteUserTasks removes all tasks for a user", async () => {
+    const user2 = "user:Bob" as ID;
+    
+    // Create multiple tasks for user2
+    const task1 = await tasks.createTask({
+      user: user2,
+      title: "Task 1",
+      description: "First task",
+    });
+    const task2 = await tasks.createTask({
+      user: user2,
+      title: "Task 2",
+      description: "Second task",
+    });
+    
+    assertNotEquals("error" in task1, true, "Task 1 creation should succeed.");
+    assertNotEquals("error" in task2, true, "Task 2 creation should succeed.");
+    
+    // Verify tasks exist
+    const beforeDelete = await tasks.getTasks({ user: user2 });
+    assertEquals(beforeDelete.total, 2, "User2 should have 2 tasks before deletion.");
+    
+    // Delete all tasks for user2
+    await tasks.deleteUserTasks({ user: user2 });
+    
+    // Verify all tasks are deleted
+    const afterDelete = await tasks.getTasks({ user: user2 });
+    assertEquals(afterDelete.total, 0, "User2 should have 0 tasks after deletion.");
+    
+    // Verify user's tasks are still intact
+    const userTasks = await tasks.getTasks({ user });
+    assertEquals(userTasks.total >= 1, true, "Original user's tasks should remain.");
+  });
+
   await t.step("Query: correctly identifying a task's status", async () => {
     const example = await tasks.createTask({
       user,
       title: "Status test",
       description: "Validate the task's status",
     }) as { task: ID };
-    let exampleTask = await tasks.getTask({ user, task: example.task});
+    let exampleTask = await tasks.getTask({ user, task: example.task });
     if ("error" in exampleTask) throw new Error("Query for existing task should succeed.");
 
     assertEquals(
-      tasks.getTaskStatus(exampleTask), 
+      tasks.getTaskStatus({ task: exampleTask }), 
       "pending",
-      "Correct query for pending task status should succeed." 
-    )
+      "Correct query for pending task status should succeed.",
+    );
 
     await tasks.markStarted({
       user,
       task: example.task,
       timeStarted: new Date(Date.now() - 100),
     });
-    exampleTask = await tasks.getTask({ user, task: example.task});
+    exampleTask = await tasks.getTask({ user, task: example.task });
     if ("error" in exampleTask) throw new Error("Query for existing task should succeed.");
     assertEquals(
-      tasks.getTaskStatus(exampleTask), 
+      tasks.getTaskStatus({ task: exampleTask }), 
       "in-progress",
-      "Correct query for in-progress task status should succeed." 
-    )
+      "Correct query for in-progress task status should succeed.",
+    );
 
     await tasks.markComplete({
       user,
       task: example.task,
       timeCompleted: new Date(Date.now() - 100),
     });
-    exampleTask = await tasks.getTask({ user, task: example.task});
+    exampleTask = await tasks.getTask({ user, task: example.task });
     if ("error" in exampleTask) throw new Error("Query for existing task should succeed.");
     assertEquals(
-      tasks.getTaskStatus(exampleTask), 
+      tasks.getTaskStatus({ task: exampleTask }), 
       "completed",
-      "Correct query for completed task status should succeed." 
-    )
+      "Correct query for completed task status should succeed.",
+    );
   });
 
   await client.close();

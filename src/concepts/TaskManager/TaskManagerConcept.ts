@@ -8,7 +8,7 @@ const PREFIX = "TaskManager" + ".";
 // Generic types for the concept's external dependencies
 type User = ID;
 
-// Define the types for our entires based on the concept state
+// Define the types for our entries based on the concept state
 type Task = ID;
 export type TaskStatus = "pending" | "in-progress" | "completed";
 
@@ -44,11 +44,11 @@ export default class TaskManagerConcept {
     this.tasks = this.db.collection(PREFIX + "tasks");
 
     this.tasks.createIndex({ user: 1, title: 1 }, { unique: true }).catch((err) => {
-      console.error("Failed to create task index:", err)
+      console.error("Failed to create task index:", err);
     });
 
-    this.tasks.createIndex({ title: "text" },{ name: "TextSearchIndex" }).catch(err => { 
-      console.error("Failed to create text index:", err)
+    this.tasks.createIndex({ title: "text" }, { name: "TextSearchIndex" }).catch((err) => {
+      console.error("Failed to create text index:", err);
     });
   }
 
@@ -88,8 +88,8 @@ export default class TaskManagerConcept {
       createdAt: new Date(),
       dueDate,
     };
-    
-    await this.tasks.insertOne(newTask)
+
+    await this.tasks.insertOne(newTask);
 
     return { task: newTaskId };
   }
@@ -110,15 +110,18 @@ export default class TaskManagerConcept {
     }
   ): Promise<{ task: Task } | { error: string }> {
     const { user, task, title, description, dueDate } = params;
-    
+
     const taskDoc = await this.getTask({ user, task });
     if ('error' in taskDoc) return { error: taskDoc.error };
-  
+
     if (title) {
       if (!title.trim()) return { error: "Title cannot be empty" };
-      
-      const duplicate = await this.tasks.findOne({ user, title });
-      if (duplicate) return { error: "Title must be unique" };
+
+      // Only check for duplicates if the title is actually changing
+      if (title !== taskDoc.title) {
+        const duplicate = await this.tasks.findOne({ user, title });
+        if (duplicate) return { error: "Title must be unique" };
+      }
     }
 
     if (
@@ -172,10 +175,10 @@ export default class TaskManagerConcept {
       { _id: taskDoc._id },
       { $set: { startedAt: timeStarted } }
     );
-    
+
     return {};
   }
-  
+
   /**
    * Marks a task as completed.
    * @requires The task must belong to the user. 
@@ -299,7 +302,7 @@ export default class TaskManagerConcept {
       .skip(skip)
       .limit(limit)
       .toArray();
-    
+
     const total = await this.tasks.countDocuments({ user });
     const totalPages = Math.ceil(total / limit);
 
