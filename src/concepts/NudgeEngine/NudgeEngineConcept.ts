@@ -24,14 +24,16 @@ type Nudge = ID;
  *   a user User
  *   a task Task
  *   a deliveryTime Date
- *   a triggered Boolean
+ *   a triggeredAt Date (null when not yet triggered)
+ *   a message String (optional, set when nudge is triggered)
  */
 interface NudgeDoc {
   _id: Nudge;
   user: User;
   task: Task;
   deliveryTime: Date;
-  triggered: boolean;
+  triggeredAt: Date | null;
+  message?: string;
 }
 
 /**
@@ -70,7 +72,7 @@ export default class NudgeEngineConcept {
       user,
       task,
       deliveryTime: new Date(deliveryTime),
-      triggered: false,
+      triggeredAt: null,
     };
 
     try {
@@ -95,7 +97,7 @@ export default class NudgeEngineConcept {
     const nudgeDoc = await this.nudges.findOne({ user, task });
     if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
 
-    if (nudgeDoc.triggered) return { error: "Nudge has already been triggered" };
+    if (nudgeDoc.triggeredAt !== null) return { error: "Nudge has already been triggered" };
 
     await this.nudges.deleteOne({ _id: nudgeDoc._id });
 
@@ -135,7 +137,7 @@ export default class NudgeEngineConcept {
     const nudgeDoc = await this.nudges.findOne({
       user,
       task,
-      triggered: false,
+      triggeredAt: null,
       deliveryTime: { $lte: now },
     });
 
@@ -143,7 +145,7 @@ export default class NudgeEngineConcept {
       const failedNudge = await this.nudges.findOne({ user, task });
 
       if (!failedNudge) return { error: "Nudge does not exist for this task" };
-      if (failedNudge.triggered) return { error: "Nudge has already been triggered" };
+      if (failedNudge.triggeredAt !== null) return { error: "Nudge has already been triggered" };
       if (failedNudge.deliveryTime.getTime() > now.getTime()) return { error: "Nudge delivery time has not arrived yet" };
 
       return { error: "Unknown error triggering nudge" };
@@ -171,7 +173,7 @@ export default class NudgeEngineConcept {
 
       await this.nudges.updateOne(
         { _id: nudgeDoc._id },
-        { $set: { triggered: true } }
+        { $set: { triggeredAt: new Date(), message: generatedMessage } }
       );
 
       return { message: generatedMessage, nudge: nudgeDoc._id };
@@ -213,9 +215,9 @@ export default class NudgeEngineConcept {
     const filter: Record<string, unknown> = { user };
 
     if (status === "pending") {
-      filter.triggered = false;
+      filter.triggeredAt = null;
     } else if (status === "triggered") {
-      filter.triggered = true;
+      filter.triggeredAt = { $ne: null };
     }
 
     const nudges = await this.nudges
@@ -237,7 +239,7 @@ export default class NudgeEngineConcept {
     const nudges = await this.nudges
       .find({
         user,
-        triggered: false,
+        triggeredAt: null,
         deliveryTime: { $lte: now }
       })
       .sort({ deliveryTime: 1 })

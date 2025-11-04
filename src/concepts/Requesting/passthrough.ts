@@ -83,7 +83,7 @@ export const exclusions: Array<string> = [
   "/api/EmotionLogger/getEmotionStats",
 
   // NudgeEngine - All actions require user authorization
-  "/api/NudgeEngine/scheduleNudge",
+  "/api/NudgeEngine/scheduleNudge", // BACKEND-ONLY: triggered automatically by AutoScheduleNudgeOnTaskCreate sync
   "/api/NudgeEngine/cancelNudge",
   "/api/NudgeEngine/deleteUserNudges",
   "/api/NudgeEngine/nudgeUser", // BACKEND-ONLY: triggered automatically

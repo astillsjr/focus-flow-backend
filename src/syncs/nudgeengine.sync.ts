@@ -1,7 +1,10 @@
 /**
  * NudgeEngine synchronizations.
- * Handles nudge scheduling and retrieval with user authentication via access tokens.
- * Note: nudgeUser is backend-only and handled separately.
+ * Handles nudge retrieval and cancellation with user authentication via access tokens.
+ * 
+ * Note: 
+ * - scheduleNudge is BACKEND-ONLY and called automatically via syncs (e.g., AutoScheduleNudgeOnTaskCreate)
+ * - nudgeUser is BACKEND-ONLY and triggered automatically by the background scheduler
  */
 
 import { NudgeEngine, UserAuthentication, Requesting } from "@concepts";
@@ -10,54 +13,9 @@ import { actions, Sync } from "@engine";
 // ============================================================================
 // SCHEDULE NUDGE
 // ============================================================================
-
-export const ScheduleNudgeRequest: Sync = ({ request, accessToken, task, deliveryTime }) => ({
-  when: actions([
-    Requesting.request,
-    { path: "/NudgeEngine/scheduleNudge", accessToken, task, deliveryTime },
-    { request },
-  ]),
-  then: actions([UserAuthentication.getUserInfo, { accessToken }]),
-});
-
-export const ScheduleNudgeWithUser: Sync = ({ request, user, userId, task, deliveryTime }) => ({
-  when: actions(
-    [Requesting.request, { path: "/NudgeEngine/scheduleNudge", task, deliveryTime }, { request }],
-    [UserAuthentication.getUserInfo, {}, { user }],
-  ),
-  where: (frames) => {
-    return frames.map((frame) => {
-      const userObj = frame[user] as { id: string } | undefined;
-      if (!userObj) return frame;
-      const newFrame = { ...frame, [userId]: userObj.id };
-      // Convert deliveryTime string to Date if it's a string
-      if (deliveryTime in newFrame) {
-        const dtValue = newFrame[deliveryTime];
-        if (typeof dtValue === 'string') {
-          newFrame[deliveryTime] = new Date(dtValue);
-        }
-      }
-      return newFrame;
-    });
-  },
-  then: actions([NudgeEngine.scheduleNudge, { user: userId, task, deliveryTime }]),
-});
-
-export const ScheduleNudgeResponse: Sync = ({ request, nudge }) => ({
-  when: actions(
-    [Requesting.request, { path: "/NudgeEngine/scheduleNudge" }, { request }],
-    [NudgeEngine.scheduleNudge, {}, { nudge }],
-  ),
-  then: actions([Requesting.respond, { request, nudge }]),
-});
-
-export const ScheduleNudgeResponseError: Sync = ({ request, error }) => ({
-  when: actions(
-    [Requesting.request, { path: "/NudgeEngine/scheduleNudge" }, { request }],
-    [NudgeEngine.scheduleNudge, {}, { error }],
-  ),
-  then: actions([Requesting.respond, { request, error }]),
-});
+// NOTE: scheduleNudge is BACKEND-ONLY and called automatically via syncs
+// (e.g., AutoScheduleNudgeOnTaskCreate). It should NOT be exposed to frontend.
+// ============================================================================
 
 // ============================================================================
 // CANCEL NUDGE

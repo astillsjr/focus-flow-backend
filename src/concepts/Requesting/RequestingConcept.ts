@@ -1,5 +1,6 @@
 import { Hono } from "jsr:@hono/hono";
 import { cors } from "jsr:@hono/hono/cors";
+import { streamSSE } from "jsr:@hono/hono/streaming";
 import { Collection, Db } from "npm:mongodb";
 import { freshID } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
@@ -297,8 +298,223 @@ export function startRequestingServer(
     }
   });
 
+  /**
+   * SERVER-SENT EVENTS (SSE) FOR NUDGE NOTIFICATIONS
+   *
+   * Provides real-time nudge notifications via SSE.
+   * Clients connect to this endpoint and receive nudges as they become ready.
+   */
+  app.get(`${REQUESTING_BASE_URL}/nudges/stream`, async (c) => {
+    // Get access token from query parameter or Authorization header
+    const accessToken = c.req.query("accessToken") || 
+      c.req.header("Authorization")?.replace("Bearer ", "") ||
+      c.req.header("authorization")?.replace("Bearer ", "");
+
+    if (!accessToken) {
+      return c.json({ error: "Authentication required. Provide accessToken in query or Authorization header." }, 401);
+    }
+
+    // Authenticate user
+    const { UserAuthentication, NudgeEngine } = concepts;
+    if (!UserAuthentication || !NudgeEngine) {
+      return c.json({ error: "Required concepts not available." }, 500);
+    }
+
+    let userInfo;
+    try {
+      userInfo = await UserAuthentication.getUserInfo({ accessToken });
+    } catch (error) {
+      return c.json({ error: "Authentication failed." }, 401);
+    }
+
+    if ("error" in userInfo) {
+      return c.json({ error: userInfo.error }, 401);
+    }
+
+    const userId = userInfo.user.id;
+
+    // Track which nudges we've already sent to avoid duplicates
+    const sentNudges = new Set<string>();
+
+    // Set up SSE stream
+    return streamSSE(c, async (stream) => {
+      // Clean up on disconnect - define early so it can be used throughout
+      let isCleanedUp = false;
+      let checkInterval: number | undefined;
+      let heartbeatInterval: number | undefined;
+      
+      const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+        if (checkInterval) clearInterval(checkInterval);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        sentNudges.clear();
+      };
+
+      // Helper function to safely write to stream and detect disconnection
+      const safeWriteSSE = async (data: Parameters<typeof stream.writeSSE>[0]) => {
+        try {
+          await stream.writeSSE(data);
+          return true;
+        } catch (error) {
+          // Client disconnected
+          cleanup();
+          return false;
+        }
+      };
+
+      // Send initial connection message
+      const connected = await safeWriteSSE({ 
+        data: JSON.stringify({ type: "connected", message: "Nudge stream connected" }) 
+      });
+      if (!connected) return; // Client disconnected immediately
+
+      // Send backlog of recently triggered nudges (last 24 hours) that client might have missed
+      try {
+        const recentTriggeredNudgesResult = await NudgeEngine.getUserNudges({ 
+          user: userId, 
+          status: "triggered",
+          limit: 50 
+        });
+
+        if ("nudges" in recentTriggeredNudgesResult) {
+          // Filter to only nudges triggered in the last 24 hours and that have messages
+          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const recentNudges = recentTriggeredNudgesResult.nudges
+            .filter((nudge) => {
+              // Check if nudge was triggered recently using triggeredAt timestamp
+              // Also ensure it has a message (meaning it was successfully triggered)
+              return nudge.triggeredAt !== null && 
+                     nudge.triggeredAt >= oneDayAgo && 
+                     nudge.message;
+            })
+            .sort((a, b) => {
+              // Sort by triggeredAt (most recent first), fallback to deliveryTime if triggeredAt is null
+              const aTime = a.triggeredAt?.getTime() ?? a.deliveryTime.getTime();
+              const bTime = b.triggeredAt?.getTime() ?? b.deliveryTime.getTime();
+              return bTime - aTime;
+            });
+
+          // Send backlog to client
+          for (const nudge of recentNudges) {
+            if (isCleanedUp) return; // Client disconnected
+            
+            // Mark as sent to avoid duplicates
+            sentNudges.add(nudge._id);
+
+            const success = await safeWriteSSE({
+              data: JSON.stringify({
+                type: "nudge",
+                nudge: {
+                  _id: nudge._id,
+                  task: nudge.task,
+                  deliveryTime: nudge.deliveryTime,
+                  message: nudge.message,
+                },
+              }),
+            });
+            if (!success) return; // Client disconnected
+          }
+
+          if (recentNudges.length > 0) {
+            console.log(`[SSE] Sent ${recentNudges.length} backlog nudges to user ${userId}`);
+          }
+        }
+      } catch (error) {
+        console.error("[SSE] Error sending backlog nudges:", error);
+        // If client disconnected, cleanup will have been called
+        if (isCleanedUp) return;
+      }
+
+      // Set up periodic checking for newly triggered nudges
+      // The background scheduler is responsible for triggering nudges.
+      // This endpoint only delivers notifications to connected clients.
+      checkInterval = setInterval(async () => {
+        if (isCleanedUp) return;
+        
+        try {
+          // Check for triggered nudges that we haven't sent yet
+          const triggeredNudgesResult = await NudgeEngine.getUserNudges({ 
+            user: userId, 
+            status: "triggered",
+            limit: 50 
+          });
+          
+          if ("nudges" in triggeredNudgesResult) {
+            for (const nudge of triggeredNudgesResult.nudges) {
+              if (isCleanedUp) return;
+              
+              // Skip if we've already sent this nudge
+              if (sentNudges.has(nudge._id)) {
+                continue;
+              }
+              
+              // Only send nudges that have messages (successfully triggered)
+              if (nudge.message) {
+                sentNudges.add(nudge._id);
+                
+                const success = await safeWriteSSE({
+                  data: JSON.stringify({
+                    type: "nudge",
+                    nudge: {
+                      _id: nudge._id,
+                      task: nudge.task,
+                      deliveryTime: nudge.deliveryTime,
+                      message: nudge.message,
+                    },
+                  }),
+                });
+                
+                if (!success) return; // Client disconnected, exit
+                
+                console.log(`[SSE] Sent nudge ${nudge._id} to user ${userId}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("[SSE] Error checking for triggered nudges:", error);
+          // Try to send error to client, but if it fails, cleanup
+          const success = await safeWriteSSE({
+            data: JSON.stringify({ type: "error", message: "Error checking for nudges" }),
+          });
+          if (!success) return;
+        }
+      }, 5000); // Check every 5 seconds for new triggers
+
+      // Send heartbeat every 30 seconds to keep connection alive
+      heartbeatInterval = setInterval(async () => {
+        if (isCleanedUp) return;
+        
+        const success = await safeWriteSSE({
+          data: JSON.stringify({ type: "heartbeat", timestamp: new Date().toISOString() }),
+        });
+        if (!success) return; // Client disconnected
+      }, 30000);
+
+      // Keep the connection alive - wait until cleanup is called
+      // The intervals will detect disconnection via write errors
+      try {
+        // Keep running until cleanup is called
+        await new Promise<void>((resolve) => {
+          // Check every second if cleanup was called
+          const monitorInterval = setInterval(() => {
+            if (isCleanedUp) {
+              clearInterval(monitorInterval);
+              resolve();
+            }
+          }, 1000);
+        });
+      } finally {
+        cleanup();
+      }
+    });
+  });
+
   console.log(
     `\n🚀 Requesting server listening for POST requests at base path of ${routePath}`,
+  );
+  console.log(
+    `📡 SSE nudge stream available at GET ${REQUESTING_BASE_URL}/nudges/stream?accessToken=<token>`,
   );
 
   Deno.serve({ port: PORT }, app.fetch);

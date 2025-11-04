@@ -33,8 +33,8 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
     const created = await nudgeEngine.nudges.findOne({ _id: nudge });
     assertExists(created);
     assertEquals(
-      created.triggered, 
-      false,
+      created.triggeredAt, 
+      null,
       "A new nudge should not be marked as triggered"
     );
 
@@ -57,7 +57,8 @@ Deno.test("NudgeEngine Concept - Operational Principle & Scenarios", async (t) =
 
     // 4. Ensure successful trigger
     const afterTrigger = await nudgeEngine.nudges.findOne({ _id: nudge });
-    assertEquals(afterTrigger?.triggered, true);
+    assertNotEquals(afterTrigger?.triggeredAt, null, "Nudge should have triggeredAt timestamp");
+    assertExists(afterTrigger?.triggeredAt, "triggeredAt should be set after triggering");
   });
 
   await t.step("Action: scheduling prohibits duplicate nudges for the same task", async () => {

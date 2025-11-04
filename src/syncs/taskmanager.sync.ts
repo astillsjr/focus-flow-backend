@@ -765,16 +765,11 @@ export const AutoCancelNudgeOnTaskStart: Sync = ({ user, task }) => ({
 });
 
 // ============================================================================
-// NUDGE CANCELLATION ON TASK COMPLETE
+// NOTE: We do NOT cancel nudges when tasks are completed because:
+// - Nudges are meant to encourage starting, not completing
+// - If the nudge hasn't been triggered yet, the user clearly started (AutoCancelNudgeOnTaskStart handles it)
+// - If the nudge has already been triggered, canceling serves no purpose
 // ============================================================================
-
-/**
- * Automatically cancels a scheduled nudge when a task is marked as completed.
- */
-export const AutoCancelNudgeOnTaskComplete: Sync = ({ user, task }) => ({
-  when: actions([TaskManager.markComplete, { user, task }, {}]),
-  then: actions([NudgeEngine.cancelNudge, { user, task }]),
-});
 
 // ============================================================================
 // CASCADING DELETION ON TASK DELETION
