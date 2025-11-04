@@ -790,17 +790,3 @@ export const AutoCascadeDeleteOnTaskDelete: Sync = ({ user, task }) => ({
   ),
 });
 
-// ============================================================================
-// BET RESOLUTION ON TASK COMPLETION
-// ============================================================================
-
-/**
- * Automatically resolves a bet when a task is marked as completed.
- * Uses the completion time as the completion time for bet resolution.
- * Note: This will be a no-op if the bet was already resolved on task start.
- */
-export const AutoResolveBetOnTaskComplete: Sync = ({ user, task, timeCompleted }) => ({
-  when: actions([TaskManager.markComplete, { user, task, timeCompleted }, {}]),
-  then: actions([MicroBet.resolveBet, { user, task, completionTime: timeCompleted }]),
-});
-

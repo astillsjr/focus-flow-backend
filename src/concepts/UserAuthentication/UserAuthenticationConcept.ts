@@ -25,6 +25,7 @@ type User = ID;
  *   a email String
  *   a createdAt Date
  *   a lastSeenNudgeTimestamp Date (optional, tracks when last nudge was sent)
+ *   a lastSeenBetTimestamp Date (optional, tracks when last bet event was sent)
  */
 interface UserDoc {
   _id: User;
@@ -34,6 +35,7 @@ interface UserDoc {
   createdAt: Date;
   refreshToken?: string;
   lastSeenNudgeTimestamp?: Date;
+  lastSeenBetTimestamp?: Date;
 }
 
 /**
@@ -278,6 +280,32 @@ export default class UserAuthenticationConcept {
   ): Promise<boolean> {
     const userDoc = await this.users.findOne({ _id: user });
     return !!userDoc?.refreshToken;
+  }
+
+  /**
+   * Gets the last seen bet timestamp for a user.
+   * Returns the timestamp when the last bet event was sent, or null if never sent.
+   */
+  public async getLastSeenBetTimestamp(
+    { user }: { user: User }
+  ): Promise<Date | null> {
+    const userDoc = await this.users.findOne({ _id: user });
+    return userDoc?.lastSeenBetTimestamp || null;
+  }
+
+  /**
+   * Updates the last seen bet timestamp for a user.
+   * @effects Sets the lastSeenBetTimestamp to the provided timestamp (or current time if not provided).
+   */
+  public async updateLastSeenBetTimestamp(
+    { user, timestamp }: { user: User; timestamp?: Date }
+  ): Promise<Empty> {
+    const updateTimestamp = timestamp || new Date();
+    await this.users.updateOne(
+      { _id: user },
+      { $set: { lastSeenBetTimestamp: updateTimestamp } }
+    );
+    return {};
   }
 
   /**

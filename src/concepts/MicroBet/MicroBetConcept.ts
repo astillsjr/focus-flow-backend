@@ -41,6 +41,7 @@ interface BetDoc {
   taskDueDate?: Date;
   success?: boolean;
   createdAt: Date;
+  resolvedAt?: Date;
 }
 
 export default class MicroBetConcept {
@@ -203,8 +204,9 @@ export default class MicroBetConcept {
       betDoc.taskDueDate
     );
 
+    const resolvedAt = new Date();
     await Promise.all([
-      this.bets.updateOne({ _id: betDoc._id }, { $set: { success: true } }),
+      this.bets.updateOne({ _id: betDoc._id }, { $set: { success: true, resolvedAt } }),
       this.users.updateOne({ _id: user }, { $inc: { points: reward, streak: 1 } }),
     ]);
 
@@ -234,8 +236,9 @@ export default class MicroBetConcept {
       return { error: "Deadline has not yet passed" };
     }
 
+    const resolvedAt = new Date();
     await Promise.all([
-      this.bets.updateOne({ _id: betDoc._id }, { $set: { success: false } }),
+      this.bets.updateOne({ _id: betDoc._id }, { $set: { success: false, resolvedAt } }),
       this.users.updateOne({ _id: user }, { $set: { streak: 0 } }),
     ]);
 
@@ -337,6 +340,30 @@ export default class MicroBetConcept {
     const bets = await this.bets
       .find({ user })
       .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+    
+    return { bets };
+  }
+
+  /**
+   * Retrieves recently resolved bets for a user (resolved after a timestamp).
+   * @requires The user must have a betting profile.
+   * @effects Returns bets that have been resolved (success !== undefined) and were resolved after the specified timestamp.
+   */
+  public async getRecentlyResolvedBets(
+    { user, afterTimestamp, limit = 50 }: { user: User; afterTimestamp: Date; limit?: number }
+  ): Promise<{ bets: BetDoc[] } | { error: string }> {
+    const userProfile = await this.users.findOne({ _id: user });
+    if (!userProfile) return { error: "User profile not found" };
+
+    const bets = await this.bets
+      .find({
+        user,
+        success: { $exists: true },
+        resolvedAt: { $gte: afterTimestamp },
+      })
+      .sort({ resolvedAt: -1 })
       .limit(limit)
       .toArray();
     

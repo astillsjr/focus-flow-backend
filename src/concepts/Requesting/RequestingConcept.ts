@@ -299,12 +299,15 @@ export function startRequestingServer(
   });
 
   /**
-   * SERVER-SENT EVENTS (SSE) FOR NUDGE NOTIFICATIONS
+   * UNIFIED SERVER-SENT EVENTS (SSE) STREAM
    *
-   * Provides real-time nudge notifications via SSE.
-   * Clients connect to this endpoint and receive nudges as they become ready.
+   * Provides real-time notifications for multiple event types via SSE:
+   * - Nudge notifications (when nudges become ready)
+   * - Bet events (when bets are resolved or expire)
+   * 
+   * Clients connect to this endpoint and receive events as they occur.
    */
-  app.get(`${REQUESTING_BASE_URL}/nudges/stream`, async (c) => {
+  const unifiedEventStream = async (c: any) => {
     // Get access token from query parameter or Authorization header
     const accessToken = c.req.query("accessToken") || 
       c.req.header("Authorization")?.replace("Bearer ", "") ||
@@ -315,8 +318,8 @@ export function startRequestingServer(
     }
 
     // Authenticate user and get required concepts
-    const { UserAuthentication, NudgeEngine, TaskManager, EmotionLogger } = concepts;
-    if (!UserAuthentication || !NudgeEngine || !TaskManager || !EmotionLogger) {
+    const { UserAuthentication, NudgeEngine, TaskManager, EmotionLogger, MicroBet } = concepts;
+    if (!UserAuthentication || !NudgeEngine || !TaskManager || !EmotionLogger || !MicroBet) {
       return c.json({ error: "Required concepts not available." }, 500);
     }
 
@@ -339,11 +342,17 @@ export function startRequestingServer(
       let checkInterval: number | undefined;
       let heartbeatInterval: number | undefined;
       
-      // Get user's last seen timestamp from UserAuthentication
-      let lastSeenTimestamp = await UserAuthentication.getLastSeenNudgeTimestamp({ user: userId });
+      // Get user's last seen timestamps from UserAuthentication
+      let lastSeenNudgeTimestamp = await UserAuthentication.getLastSeenNudgeTimestamp({ user: userId });
       // If no lastSeen, initialize to 1 hour ago to catch recent nudges
-      if (!lastSeenTimestamp) {
-        lastSeenTimestamp = new Date(Date.now() - 60 * 60 * 1000);
+      if (!lastSeenNudgeTimestamp) {
+        lastSeenNudgeTimestamp = new Date(Date.now() - 60 * 60 * 1000);
+      }
+
+      let lastSeenBetTimestamp = await UserAuthentication.getLastSeenBetTimestamp({ user: userId });
+      // If no lastSeen, initialize to 1 hour ago to catch recent bet events
+      if (!lastSeenBetTimestamp) {
+        lastSeenBetTimestamp = new Date(Date.now() - 60 * 60 * 1000);
       }
       
       const cleanup = () => {
@@ -415,8 +424,8 @@ export function startRequestingServer(
 
           if (success) {
             // Update lastSeen timestamp to the delivery time (always move forward, never backward)
-            if (nudge.deliveryTime > lastSeenTimestamp) {
-              lastSeenTimestamp = nudge.deliveryTime;
+            if (nudge.deliveryTime > lastSeenNudgeTimestamp) {
+              lastSeenNudgeTimestamp = nudge.deliveryTime;
               // Persist the lastSeen timestamp
               await UserAuthentication.updateLastSeenNudgeTimestamp({ 
                 user: userId, 
@@ -434,27 +443,139 @@ export function startRequestingServer(
         }
       };
 
+      // Helper function to resolve and send expired bet event
+      const resolveAndSendExpiredBet = async (bet: { _id: string; task: string; deadline: Date }) => {
+        if (isCleanedUp) return false;
+
+        try {
+          // Resolve the expired bet
+          const resolveResult = await MicroBet.resolveExpiredBet({
+            user: userId,
+            task: bet.task,
+          });
+
+          // Check if bet was already resolved (race condition)
+          if ("status" in resolveResult && resolveResult.status === "already_resolved") {
+            console.log(`[SSE] Bet ${bet._id} already resolved, skipping`);
+            return false;
+          }
+
+          if ("error" in resolveResult) {
+            console.error(`[SSE] Failed to resolve expired bet ${bet._id}:`, resolveResult.error);
+            return false;
+          }
+
+          // Get the updated bet to send full details
+          const betResult = await MicroBet.getBet({ user: userId, task: bet.task });
+          if ("error" in betResult) {
+            console.error(`[SSE] Failed to get bet ${bet._id} after resolution:`, betResult.error);
+            return false;
+          }
+
+          // Send the expired bet event via SSE
+          const success = await safeWriteSSE({
+            data: JSON.stringify({
+              type: "bet_expired",
+              bet: {
+                _id: betResult._id,
+                task: betResult.task,
+                wager: betResult.wager,
+                deadline: betResult.deadline,
+                success: betResult.success, // false
+              },
+            }),
+          });
+
+          if (success) {
+            // Update lastSeenBetTimestamp to bet's resolvedAt (or current time if not available)
+            const updateTimestamp = betResult.resolvedAt || new Date();
+            if (updateTimestamp > lastSeenBetTimestamp) {
+              lastSeenBetTimestamp = updateTimestamp;
+              await UserAuthentication.updateLastSeenBetTimestamp({
+                user: userId,
+                timestamp: updateTimestamp,
+              });
+            }
+            console.log(`[SSE] Resolved and sent expired bet ${bet._id} to user ${userId}`);
+          }
+
+          return success;
+        } catch (error) {
+          console.error(`[SSE] Error resolving expired bet ${bet._id}:`, error);
+          return false;
+        }
+      };
+
+      // Helper function to send resolved bet event
+      const sendResolvedBetEvent = async (bet: { _id: string; task: string; success?: boolean; wager: number; deadline: Date; createdAt: Date; resolvedAt?: Date }) => {
+        if (isCleanedUp) return false;
+
+        try {
+          // For successful bets, we might need to get the bet details to include reward info
+          // But for now, we'll just send the basic info
+          const success = await safeWriteSSE({
+            data: JSON.stringify({
+              type: "bet_resolved",
+              bet: {
+                _id: bet._id,
+                task: bet.task,
+                wager: bet.wager,
+                deadline: bet.deadline,
+                success: bet.success,
+              },
+            }),
+          });
+
+          if (success) {
+            // Update lastSeenBetTimestamp to bet's resolvedAt (or current time if not available)
+            const updateTimestamp = bet.resolvedAt || new Date();
+            if (updateTimestamp > lastSeenBetTimestamp) {
+              lastSeenBetTimestamp = updateTimestamp;
+              await UserAuthentication.updateLastSeenBetTimestamp({
+                user: userId,
+                timestamp: updateTimestamp,
+              });
+            }
+            console.log(`[SSE] Sent resolved bet ${bet._id} event to user ${userId}`);
+          }
+
+          return success;
+        } catch (error) {
+          console.error(`[SSE] Error sending resolved bet event ${bet._id}:`, error);
+          return false;
+        }
+      };
+
       // Send initial connection message
       const connected = await safeWriteSSE({ 
-        data: JSON.stringify({ type: "connected", message: "Nudge stream connected" }) 
+        data: JSON.stringify({ type: "connected", message: "Unified event stream connected" }) 
       });
       if (!connected) return;
 
-      // Handle backlog: get ready nudges since lastSeen and trigger them
-      // Also send any triggered nudges that were triggered after lastSeen (in case user disconnected before receiving)
+      // Handle backlog: get ready nudges and bet events since lastSeen
       try {
         // Get ready nudges that need to be triggered
         const readyBacklogResult = await NudgeEngine.getReadyNudgesSince({ 
           user: userId, 
-          sinceTimestamp: lastSeenTimestamp
+          sinceTimestamp: lastSeenNudgeTimestamp
         });
 
         // Get triggered nudges that were sent after lastSeen (already have messages, just need to send)
         const triggeredBacklogResult = await NudgeEngine.getNewTriggeredNudges({ 
           user: userId, 
-          afterTimestamp: lastSeenTimestamp,
+          afterTimestamp: lastSeenNudgeTimestamp,
           limit: 50
         });
+
+        // Get recently resolved bets
+        const resolvedBetsResult = await MicroBet.getRecentlyResolvedBets({
+          user: userId,
+          afterTimestamp: lastSeenBetTimestamp,
+          limit: 50,
+        });
+
+        // Get expired bets that need to be resolved
+        const expiredBetsResult = await MicroBet.getExpiredBets({ user: userId });
 
         let totalProcessed = 0;
 
@@ -464,8 +585,7 @@ export function startRequestingServer(
             if (isCleanedUp) return;
             
             // Only send nudges whose deliveryTime is after lastSeen
-            // This prevents resending the last nudge we already sent
-            if (nudge.deliveryTime <= lastSeenTimestamp) {
+            if (nudge.deliveryTime <= lastSeenNudgeTimestamp) {
               continue; // Skip this nudge, we already sent it
             }
             
@@ -484,8 +604,8 @@ export function startRequestingServer(
 
               if (success) {
                 // Update lastSeen if needed
-                if (nudge.deliveryTime > lastSeenTimestamp) {
-                  lastSeenTimestamp = nudge.deliveryTime;
+                if (nudge.deliveryTime > lastSeenNudgeTimestamp) {
+                  lastSeenNudgeTimestamp = nudge.deliveryTime;
                   await UserAuthentication.updateLastSeenNudgeTimestamp({ 
                     user: userId, 
                     timestamp: nudge.deliveryTime 
@@ -495,6 +615,31 @@ export function startRequestingServer(
               } else {
                 return; // Client disconnected
               }
+            }
+          }
+        }
+
+        // Send recently resolved bets (already resolved, just notify)
+        if ("bets" in resolvedBetsResult && resolvedBetsResult.bets.length > 0) {
+          for (const bet of resolvedBetsResult.bets) {
+            if (isCleanedUp) return;
+            // Only send bets resolved after lastSeen
+            if (!bet.resolvedAt || bet.resolvedAt <= lastSeenBetTimestamp) {
+              continue;
+            }
+            const success = await sendResolvedBetEvent(bet);
+            if (success) {
+              // Update lastSeenBetTimestamp to resolvedAt
+              if (bet.resolvedAt > lastSeenBetTimestamp) {
+                lastSeenBetTimestamp = bet.resolvedAt;
+                await UserAuthentication.updateLastSeenBetTimestamp({
+                  user: userId,
+                  timestamp: bet.resolvedAt,
+                });
+              }
+              totalProcessed++;
+            } else {
+              return; // Client disconnected
             }
           }
         }
@@ -513,19 +658,32 @@ export function startRequestingServer(
           }
         }
 
+        // Resolve expired bets
+        if ("bets" in expiredBetsResult && expiredBetsResult.bets.length > 0) {
+          console.log(`[SSE] Found ${expiredBetsResult.bets.length} expired bets in backlog for user ${userId}`);
+          
+          for (const bet of expiredBetsResult.bets) {
+            if (isCleanedUp) return;
+            const success = await resolveAndSendExpiredBet(bet);
+            if (success) {
+              totalProcessed++;
+            }
+          }
+        }
+
         if (totalProcessed > 0) {
-          console.log(`[SSE] Processed ${totalProcessed} nudges in backlog for user ${userId}`);
+          console.log(`[SSE] Processed ${totalProcessed} events in backlog for user ${userId}`);
         }
       } catch (error) {
-        console.error("[SSE] Error processing backlog nudges:", error);
+        console.error("[SSE] Error processing backlog events:", error);
         if (isCleanedUp) return;
       }
 
-      // Set up periodic checking for ready nudges
+      // Set up periodic checking for ready nudges and expired bets
       checkInterval = setInterval(async () => {
         if (isCleanedUp) return;
         
-        // Re-verify authentication before processing nudges
+        // Re-verify authentication before processing events
         // This ensures we stop if the user logged out
         try {
           const currentUserInfo = await UserAuthentication.getUserInfo({ accessToken });
@@ -553,7 +711,7 @@ export function startRequestingServer(
         }
         
         try {
-          // Get ready nudges (not yet triggered)
+          // Check for ready nudges (not yet triggered)
           const readyNudgesResult = await NudgeEngine.getReadyNudges({ user: userId });
           
           if ("nudges" in readyNudgesResult && readyNudgesResult.nudges.length > 0) {
@@ -567,10 +725,55 @@ export function startRequestingServer(
               }
             }
           }
+
+          // Check for expired bets that need to be resolved
+          const expiredBetsResult = await MicroBet.getExpiredBets({ user: userId });
+          
+          if ("bets" in expiredBetsResult && expiredBetsResult.bets.length > 0) {
+            // Process each expired bet
+            for (const bet of expiredBetsResult.bets) {
+              if (isCleanedUp) return;
+              const success = await resolveAndSendExpiredBet(bet);
+              if (!success) {
+                // Connection died during resolution, cleanup already called
+                return;
+              }
+            }
+          }
+
+          // Check for newly resolved bets (resolved via task start syncs)
+          const recentlyResolvedBetsResult = await MicroBet.getRecentlyResolvedBets({
+            user: userId,
+            afterTimestamp: lastSeenBetTimestamp,
+            limit: 10, // Only check recent ones during polling
+          });
+
+          if ("bets" in recentlyResolvedBetsResult && recentlyResolvedBetsResult.bets.length > 0) {
+            // Send notifications for newly resolved bets
+            for (const bet of recentlyResolvedBetsResult.bets) {
+              if (isCleanedUp) return;
+              // Only send bets resolved after lastSeen
+              if (bet.resolvedAt && bet.resolvedAt > lastSeenBetTimestamp) {
+                const success = await sendResolvedBetEvent(bet);
+                if (!success) {
+                  // Connection died, cleanup already called
+                  return;
+                }
+                // Update lastSeenBetTimestamp to resolvedAt
+                if (bet.resolvedAt > lastSeenBetTimestamp) {
+                  lastSeenBetTimestamp = bet.resolvedAt;
+                  await UserAuthentication.updateLastSeenBetTimestamp({
+                    user: userId,
+                    timestamp: bet.resolvedAt,
+                  });
+                }
+              }
+            }
+          }
         } catch (error) {
-          console.error("[SSE] Error checking for ready nudges:", error);
+          console.error("[SSE] Error checking for events:", error);
           const success = await safeWriteSSE({
-            data: JSON.stringify({ type: "error", message: "Error checking for nudges" }),
+            data: JSON.stringify({ type: "error", message: "Error checking for events" }),
           });
           if (!success) {
             // Connection failed, cleanup already called by safeWriteSSE
@@ -605,13 +808,22 @@ export function startRequestingServer(
         cleanup();
       }
     });
-  });
+  };
+
+  // Register unified event stream endpoint
+  app.get(`${REQUESTING_BASE_URL}/events/stream`, unifiedEventStream);
+
+  // Keep old endpoint for backward compatibility
+  app.get(`${REQUESTING_BASE_URL}/nudges/stream`, unifiedEventStream);
 
   console.log(
     `\n🚀 Requesting server listening for POST requests at base path of ${routePath}`,
   );
   console.log(
-    `📡 SSE nudge stream available at GET ${REQUESTING_BASE_URL}/nudges/stream?accessToken=<token>`,
+    `📡 Unified SSE event stream available at GET ${REQUESTING_BASE_URL}/events/stream?accessToken=<token>`,
+  );
+  console.log(
+    `📡 Legacy SSE nudge stream (backward compatible) at GET ${REQUESTING_BASE_URL}/nudges/stream?accessToken=<token>`,
   );
 
   Deno.serve({ port: PORT }, app.fetch);
