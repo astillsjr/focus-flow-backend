@@ -110,6 +110,23 @@ export default class NudgeEngineConcept {
   }
 
   /**
+   * Deletes a nudge for a specific task, regardless of whether it has been triggered.
+   * This is used for cleanup operations like task deletion.
+   * @requires The nudge must exist for the specified user and task.
+   * @effects Removes the nudge from the database, even if it has been triggered.
+   */
+  public async deleteNudgeForTask(
+    { user, task }: { user: User, task: Task },
+  ): Promise<Empty | { error: string }> {
+    const nudgeDoc = await this.nudges.findOne({ user, task });
+    if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
+
+    await this.nudges.deleteOne({ _id: nudgeDoc._id });
+
+    return {};
+  }
+
+  /**
    * Deletes all nudges associated with a user.
    * @effects Removes every nudge targeted at the specified user.
    */
@@ -303,7 +320,7 @@ export default class NudgeEngineConcept {
           $ne: null,
           $gt: afterTimestamp 
         },
-        message: { $exists: true, $ne: null } // Only nudges with messages
+        message: { $exists: true, $ne: "" } // Only nudges with messages
       })
       .sort({ triggeredAt: 1 }) // Oldest first
       .limit(limit)

@@ -778,14 +778,14 @@ export const AutoCancelNudgeOnTaskStart: Sync = ({ user, task }) => ({
 /**
  * Automatically deletes related data when a task is deleted:
  * 1. Cancels associated bet (if exists)
- * 2. Cancels associated nudge (if exists)
+ * 2. Deletes associated nudge (if exists, regardless of triggered status)
  * 3. Deletes associated emotion logs
  */
 export const AutoCascadeDeleteOnTaskDelete: Sync = ({ user, task }) => ({
   when: actions([TaskManager.deleteTask, { user, task }, {}]),
   then: actions(
     [MicroBet.cancelBet, { user, task }],
-    [NudgeEngine.cancelNudge, { user, task }],
+    [NudgeEngine.deleteNudgeForTask, { user, task }],
     [EmotionLogger.deleteTaskLogs, { user, task }],
   ),
 });
