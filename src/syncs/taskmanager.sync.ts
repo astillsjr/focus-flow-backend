@@ -19,12 +19,19 @@ export const CreateTaskRequest: Sync = ({ request, accessToken, title, descripti
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const CreateTaskWithUser: Sync = ({ request, user, title, description, dueDate }) => ({
+export const CreateTaskWithUser: Sync = ({ request, user, userId, title, description, dueDate }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/createTask" }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.createTask, { user: user.id, title, description, dueDate }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.createTask, { user: userId, title, description, dueDate }]),
 });
 
 export const CreateTaskResponse: Sync = ({ request, task }) => ({
@@ -56,12 +63,19 @@ export const UpdateTaskRequest: Sync = ({ request, accessToken, task, title, des
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const UpdateTaskWithUser: Sync = ({ request, user, task, title, description, dueDate }) => ({
+export const UpdateTaskWithUser: Sync = ({ request, user, userId, task, title, description, dueDate }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/updateTask", task }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.updateTask, { user: user.id, task, title, description, dueDate }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.updateTask, { user: userId, task, title, description, dueDate }]),
 });
 
 export const UpdateTaskResponse: Sync = ({ request, task }) => ({
@@ -93,12 +107,19 @@ export const MarkStartedRequest: Sync = ({ request, accessToken, task, timeStart
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const MarkStartedWithUser: Sync = ({ request, user, task, timeStarted }) => ({
+export const MarkStartedWithUser: Sync = ({ request, user, userId, task, timeStarted }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/markStarted", task }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.markStarted, { user: user.id, task, timeStarted }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.markStarted, { user: userId, task, timeStarted }]),
 });
 
 export const MarkStartedResponse: Sync = ({ request }) => ({
@@ -130,12 +151,19 @@ export const MarkCompleteRequest: Sync = ({ request, accessToken, task, timeComp
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const MarkCompleteWithUser: Sync = ({ request, user, task, timeCompleted }) => ({
+export const MarkCompleteWithUser: Sync = ({ request, user, userId, task, timeCompleted }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/markComplete", task }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.markComplete, { user: user.id, task, timeCompleted }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.markComplete, { user: userId, task, timeCompleted }]),
 });
 
 export const MarkCompleteResponse: Sync = ({ request }) => ({
@@ -167,12 +195,19 @@ export const DeleteTaskRequest: Sync = ({ request, accessToken, task }) => ({
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const DeleteTaskWithUser: Sync = ({ request, user, task }) => ({
+export const DeleteTaskWithUser: Sync = ({ request, user, userId, task }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/deleteTask", task }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.deleteTask, { user: user.id, task }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.deleteTask, { user: userId, task }]),
 });
 
 export const DeleteTaskResponse: Sync = ({ request }) => ({
@@ -204,12 +239,19 @@ export const DeleteUserTasksRequest: Sync = ({ request, accessToken }) => ({
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const DeleteUserTasksWithUser: Sync = ({ request, user }) => ({
+export const DeleteUserTasksWithUser: Sync = ({ request, user, userId }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/deleteUserTasks" }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.deleteUserTasks, { user: user.id }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.deleteUserTasks, { user: userId }]),
 });
 
 export const DeleteUserTasksResponse: Sync = ({ request }) => ({
@@ -233,12 +275,19 @@ export const GetTaskRequest: Sync = ({ request, accessToken, task }) => ({
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const GetTaskWithUser: Sync = ({ request, user, task }) => ({
+export const GetTaskWithUser: Sync = ({ request, user, userId, task }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/getTask", task }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.getTask, { user: user.id, task }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.getTask, { user: userId, task }]),
 });
 
 export const GetTaskResponse: Sync = ({ request, task }) => ({
@@ -270,12 +319,19 @@ export const GetTasksRequest: Sync = ({ request, accessToken, page, limit, sortB
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const GetTasksWithUser: Sync = ({ request, user, page, limit, sortBy, sortOrder }) => ({
+export const GetTasksWithUser: Sync = ({ request, user, userId, page, limit, sortBy, sortOrder }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/getTasks", page, limit, sortBy, sortOrder }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.getTasks, { user: user.id, page, limit, sortBy, sortOrder }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.getTasks, { user: userId, page, limit, sortBy, sortOrder }]),
 });
 
 export const GetTasksResponse: Sync = ({ request, tasks, total, page, totalPages }) => ({
@@ -301,12 +357,19 @@ export const GetTaskStatusRequest: Sync = ({ request, accessToken, task }) => ({
 
 // Note: getTaskStatus is a helper method that requires a TaskDoc object
 // We get the task first, then calculate status from the task document
-export const GetTaskStatusWithUser: Sync = ({ request, user, task }) => ({
+export const GetTaskStatusWithUser: Sync = ({ request, user, userId, task }) => ({
   when: actions(
     [Requesting.request, { path: "/TaskManager/getTaskStatus", task }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
-  then: actions([TaskManager.getTask, { user: user.id, task }]),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions([TaskManager.getTask, { user: userId, task }]),
 });
 
 // Calculate status from task document: "pending" | "in-progress" | "completed"

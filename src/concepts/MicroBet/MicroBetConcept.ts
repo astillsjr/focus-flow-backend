@@ -261,11 +261,12 @@ export default class MicroBetConcept {
    */
   public async getActiveBets(
     { user }: { user: User }
-  ): Promise<BetDoc[] | { error: string }> {
+  ): Promise<{ bets: BetDoc[] } | { error: string }> {
     const userProfile = await this.users.findOne({ _id: user });
     if (!userProfile) return { error: "User profile not found" };
 
-    return this.bets.find({ user, success: { $exists: false } }).toArray();
+    const bets = await this.bets.find({ user, success: { $exists: false } }).toArray();
+    return { bets };
   }
 
   /**
@@ -275,15 +276,16 @@ export default class MicroBetConcept {
    */
   public async getExpiredBets(
     { user }: { user: User }
-  ): Promise<BetDoc[] | { error: string }> {
+  ): Promise<{ bets: BetDoc[] } | { error: string }> {
     const userProfile = await this.users.findOne({ _id: user });
     if (!userProfile) return { error: "User profile not found" };
     
-    return this.bets.find({
+    const bets = await this.bets.find({
       user,
       success: { $exists: false },
       deadline: { $lt: new Date() },
     }).toArray();
+    return { bets };
   }
 
   /**

@@ -231,9 +231,9 @@ export default class NudgeEngineConcept {
    */
   public async getReadyNudges(
     { user }: { user: User }
-  ): Promise<NudgeDoc[]> {
+  ): Promise<{ nudges: NudgeDoc[] }> {
     const now = new Date();
-    return await this.nudges
+    const nudges = await this.nudges
       .find({
         user,
         triggered: false,
@@ -241,6 +241,7 @@ export default class NudgeEngineConcept {
       })
       .sort({ deliveryTime: 1 })
       .toArray();
+    return { nudges };
   }
 
   /**
