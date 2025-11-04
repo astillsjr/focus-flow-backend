@@ -102,3 +102,87 @@ The following actions are marked **[BACKEND-ONLY]** and should **never** be call
 
 These actions should still be excluded from passthrough routes, but syncs should handle their invocation rather than frontend requests.
 
+###Should be backend syncs (event-driven)  
+These respond to action completions and fit the current sync pattern:
+
+1. Automatic nudge scheduling (Item #1)
+- When: TaskManager.createTask completes
+- Then: NudgeEngine.scheduleNudge with calculated delivery time
+- Pattern: Similar to existing syncs
+
+2. Bet resolution on task start (Item #2)
+- When: TaskManager.markStarted completes
+- Then: MicroBet.resolveBet (if bet exists)
+- Pattern: Standard sync with where clause to check for bet existence
+
+3. Nudge cancellation on task start/complete (Item #3)
+- When: TaskManager.markStarted or TaskManager.markComplete completes
+- Then: NudgeEngine.cancelNudge
+- Pattern: Two syncs (one for each action)
+
+4. Cascading deletion on task deletion (Item #4)
+- When: TaskManager.deleteTask completes
+- Then: MicroBet.cancelBet, NudgeEngine.cancelNudge, EmotionLogger.deleteTaskLogs
+- Pattern: Multiple then actions in a single sync
+
+5. Bet resolution on task completion (Item #10)
+- When: TaskManager.markComplete completes
+- Then: MicroBet.resolveBet (if not already resolved)
+- Pattern: Similar to #2, but for completion
+
+6. Cascading user data deletion (Item #8)
+- When: UserAuthentication.deleteAccount is called
+- Then: Delete all tasks, emotion logs, nudges, and remove bettor
+- Pattern: Multiple cascading deletions in one sync
+
+## Need different mechanisms (not syncs)  
+These require scheduled/periodic execution, which the current sync system doesn't support:
+
+7. Automatic bet expiration monitoring (Item #5)
+- Mechanism: Cron job or scheduled task
+- Implementation: Periodic job that:
+  - Queries MicroBet.getExpiredBets for all users
+  - Calls MicroBet.resolveExpiredBet for each expired bet
+- Frequency: Every 1-2 minutes
+- Note: Could be a background worker process
+
+8. Automatic nudge delivery (Item #6)
+- Mechanism: Cron job or scheduled task
+- Implementation: Periodic job that:
+  - Queries NudgeEngine.getReadyNudges for all users
+  - Calls NudgeEngine.nudgeUser for each ready nudge
+- Frequency: Every minute
+- Note: Could also use WebSocket/SSE for real-time delivery
+
+## Better handled elsewhere
+
+9. Auto-refresh access tokens (Item #7)
+- Mechanism: HTTP middleware/interceptor
+- Not a sync: Token refresh should be transparent at the HTTP layer
+- Implementation: Middleware that checks token expiry and refreshes before requests
+
+10.Store initialization after login/register (Item #9)
+- Mechanism: Automatic profile creation or separate endpoint
+- Alternative: Sync that triggers MicroBet.initializeBettor when UserAuthentication.register completes
+- Could work as a sync, but automatic profile creation might be simpler
+
+## Summary
+
+### High priority syncs to implement:
+1. Automatic nudge scheduling on task creation
+2. Bet resolution on task start
+3. Nudge cancellation on task start/complete
+4. Cascading deletion on task deletion
+5.Bet resolution on task completion
+6. Cascading user data deletion
+
+### Infrastructure needed:
+- Scheduled task system for:
+  - Bet expiration monitoring
+  - Nudge delivery
+
+### Architectural decisions:
+- Token refresh → HTTP middleware
+- Profile initialization → Sync or automatic creation
+
+The sync system is event-driven (triggered by action completions), so periodic tasks like bet expiration and nudge delivery need a separate scheduled task infrastructure.

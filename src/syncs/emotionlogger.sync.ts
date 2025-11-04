@@ -268,7 +268,14 @@ export const GetEmotionLogsWithUser: Sync = ({ request, user, userId, page, limi
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert null to default values for optional parameters
+      if (page in newFrame && newFrame[page] === null) newFrame[page] = 1;
+      if (limit in newFrame && newFrame[limit] === null) newFrame[limit] = 20;
+      if (sortBy in newFrame && newFrame[sortBy] === null) newFrame[sortBy] = "createdAt";
+      if (sortOrder in newFrame && newFrame[sortOrder] === null) newFrame[sortOrder] = -1;
+      // For phase and emotion, null means "no filter" - keep as null (will be handled by concept method)
+      return newFrame;
     });
   },
   then: actions([EmotionLogger.getEmotionLogs, { user: userId, page, limit, phase, emotion, sortBy, sortOrder }]),

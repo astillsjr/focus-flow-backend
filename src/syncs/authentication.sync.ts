@@ -3,7 +3,7 @@
  * Handles token validation and authentication-related actions.
  */
 
-import { UserAuthentication, Requesting } from "@concepts";
+import { UserAuthentication, Requesting, TaskManager, EmotionLogger, NudgeEngine, MicroBet } from "@concepts";
 import { actions, Sync } from "@engine";
 
 // ============================================================================
@@ -149,5 +149,39 @@ export const DeleteAccountResponseError: Sync = ({ request, error }) => ({
     [UserAuthentication.deleteAccount, {}, { error }],
   ),
   then: actions([Requesting.respond, { request, error }]),
+});
+
+// ============================================================================
+// CASCADING USER DATA DELETION ON ACCOUNT DELETION
+// ============================================================================
+
+/**
+ * Automatically deletes all user-related data when an account is deleted.
+ * This sync should trigger BEFORE the account is actually deleted to ensure
+ * all related data is cleaned up. It watches for the deleteAccount request
+ * and cascades deletions to:
+ * 1. Delete all tasks (TaskManager.deleteUserTasks)
+ * 2. Delete all emotion logs (EmotionLogger.deleteUserLogs)
+ * 3. Delete all nudges (NudgeEngine.deleteUserNudges)
+ * 4. Remove bettor profile (MicroBet.removeBettor)
+ */
+export const AutoCascadeDeleteOnAccountDelete: Sync = ({ request, accessToken, user, userId }) => ({
+  when: actions(
+    [Requesting.request, { path: "/UserAuthentication/deleteAccount", accessToken }, { request }],
+    [UserAuthentication.getUserInfo, { accessToken }, { user }],
+  ),
+  where: (frames) => {
+    return frames.map((frame) => {
+      const userObj = frame[user] as { id: string } | undefined;
+      if (!userObj) return frame;
+      return { ...frame, [userId]: userObj.id };
+    });
+  },
+  then: actions(
+    [TaskManager.deleteUserTasks, { user: userId }],
+    [EmotionLogger.deleteUserLogs, { user: userId }],
+    [NudgeEngine.deleteUserNudges, { user: userId }],
+    [MicroBet.removeBettor, { user: userId }],
+  ),
 });
 

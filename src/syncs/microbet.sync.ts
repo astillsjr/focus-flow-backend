@@ -388,7 +388,10 @@ export const GetRecentActivityWithUser: Sync = ({ request, user, userId, limit }
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert null to default value for optional parameter
+      if (limit in newFrame && newFrame[limit] === null) newFrame[limit] = 10;
+      return newFrame;
     });
   },
   then: actions([MicroBet.getRecentActivity, { user: userId, limit }]),

@@ -3,7 +3,7 @@
  * Handles task CRUD operations with user authentication via access tokens.
  */
 
-import { TaskManager, UserAuthentication, Requesting } from "@concepts";
+import { TaskManager, UserAuthentication, Requesting, NudgeEngine, MicroBet, EmotionLogger } from "@concepts";
 import { actions, Sync } from "@engine";
 
 // ============================================================================
@@ -587,28 +587,35 @@ export const GetTaskResponseError: Sync = ({ request, error }) => ({
 // GET TASKS (list with pagination)
 // ============================================================================
 
-export const GetTasksRequest: Sync = ({ request, accessToken, page, limit, sortBy, sortOrder }) => ({
+export const GetTasksRequest: Sync = ({ request, accessToken, page, limit, sortBy, sortOrder, status, search }) => ({
   when: actions([
     Requesting.request,
-    { path: "/TaskManager/getTasks", accessToken, page, limit, sortBy, sortOrder },
+    { path: "/TaskManager/getTasks", accessToken, page, limit, sortBy, sortOrder, status, search },
     { request },
   ]),
   then: actions([UserAuthentication.getUserInfo, { accessToken }]),
 });
 
-export const GetTasksWithUser: Sync = ({ request, user, userId, page, limit, sortBy, sortOrder }) => ({
+export const GetTasksWithUser: Sync = ({ request, user, userId, page, limit, sortBy, sortOrder, status, search }) => ({
   when: actions(
-    [Requesting.request, { path: "/TaskManager/getTasks", page, limit, sortBy, sortOrder }, { request }],
+    [Requesting.request, { path: "/TaskManager/getTasks", page, limit, sortBy, sortOrder, status, search }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
   where: (frames) => {
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert null to default values for optional parameters
+      if (page in newFrame && newFrame[page] === null) newFrame[page] = 1;
+      if (limit in newFrame && newFrame[limit] === null) newFrame[limit] = 10;
+      if (sortBy in newFrame && newFrame[sortBy] === null) newFrame[sortBy] = "createdAt";
+      if (sortOrder in newFrame && newFrame[sortOrder] === null) newFrame[sortOrder] = -1;
+      // For status and search, null means "no filter" - keep as null (will be handled by concept method)
+      return newFrame;
     });
   },
-  then: actions([TaskManager.getTasks, { user: userId, page, limit, sortBy, sortOrder }]),
+  then: actions([TaskManager.getTasks, { user: userId, page, limit, sortBy, sortOrder, status, search }]),
 });
 
 export const GetTasksResponse: Sync = ({ request, tasks, total, page, totalPages }) => ({
@@ -676,5 +683,113 @@ export const GetTaskStatusResponseError: Sync = ({ request, error }) => ({
     [TaskManager.getTask, {}, { error }],
   ),
   then: actions([Requesting.respond, { request, error }]),
+});
+
+// ============================================================================
+// AUTOMATIC NUDGE SCHEDULING ON TASK CREATION
+// ============================================================================
+
+/**
+ * Automatically schedules a nudge when a task is created.
+ * Calculates delivery time based on task due date:
+ * - If task has due date: halfway point between now and due date, minimum 1 minute delay
+ * - If task has no due date or due date is in past: 5 minutes from now
+ */
+export const AutoScheduleNudgeOnTaskCreate: Sync = ({ user, task, dueDate, deliveryTime }) => ({
+  when: actions([TaskManager.createTask, { user, dueDate }, { task }]),
+  where: async (frames) => {
+    const now = Date.now();
+    const oneMinute = 60 * 1000;
+    const fiveMinutes = 5 * 60 * 1000;
+    
+    return frames.map((frame) => {
+      const dueDateValue = frame[dueDate] as Date | undefined;
+      let calculatedDeliveryTime: Date;
+      
+      if (dueDateValue && dueDateValue.getTime() > now) {
+        // Task has a future due date: calculate halfway point
+        const timeUntilDue = dueDateValue.getTime() - now;
+        const halfwayTime = now + (timeUntilDue / 2);
+        // Ensure minimum 1 minute delay
+        calculatedDeliveryTime = new Date(Math.max(halfwayTime, now + oneMinute));
+      } else {
+        // No due date or due date in past: schedule for 5 minutes from now
+        calculatedDeliveryTime = new Date(now + fiveMinutes);
+      }
+      
+      return { ...frame, [deliveryTime]: calculatedDeliveryTime };
+    });
+  },
+  then: actions([NudgeEngine.scheduleNudge, { user, task, deliveryTime }]),
+});
+
+// ============================================================================
+// BET RESOLUTION ON TASK START
+// ============================================================================
+
+/**
+ * Automatically resolves a bet when a task is marked as started.
+ * Uses the start time as the completion time for bet resolution.
+ */
+export const AutoResolveBetOnTaskStart: Sync = ({ user, task, timeStarted }) => ({
+  when: actions([TaskManager.markStarted, { user, task, timeStarted }, {}]),
+  then: actions([MicroBet.resolveBet, { user, task, completionTime: timeStarted }]),
+});
+
+// ============================================================================
+// NUDGE CANCELLATION ON TASK START
+// ============================================================================
+
+/**
+ * Automatically cancels a scheduled nudge when a task is marked as started.
+ */
+export const AutoCancelNudgeOnTaskStart: Sync = ({ user, task }) => ({
+  when: actions([TaskManager.markStarted, { user, task }, {}]),
+  then: actions([NudgeEngine.cancelNudge, { user, task }]),
+});
+
+// ============================================================================
+// NUDGE CANCELLATION ON TASK COMPLETE
+// ============================================================================
+
+/**
+ * Automatically cancels a scheduled nudge when a task is marked as completed.
+ */
+export const AutoCancelNudgeOnTaskComplete: Sync = ({ user, task }) => ({
+  when: actions([TaskManager.markComplete, { user, task }, {}]),
+  then: actions([NudgeEngine.cancelNudge, { user, task }]),
+});
+
+// ============================================================================
+// CASCADING DELETION ON TASK DELETION
+// ============================================================================
+
+/**
+ * Automatically deletes related data when a task is deleted:
+ * 1. Cancels associated bet (if exists)
+ * 2. Cancels associated nudge (if exists)
+ * 3. Deletes associated emotion logs
+ */
+export const AutoCascadeDeleteOnTaskDelete: Sync = ({ user, task }) => ({
+  when: actions([TaskManager.deleteTask, { user, task }, {}]),
+  then: actions(
+    [MicroBet.cancelBet, { user, task }],
+    [NudgeEngine.cancelNudge, { user, task }],
+    [EmotionLogger.deleteTaskLogs, { user, task }],
+  ),
+});
+
+// ============================================================================
+// BET RESOLUTION ON TASK COMPLETION
+// ============================================================================
+
+/**
+ * Automatically resolves a bet when a task is marked as completed.
+ * Uses the completion time as the completion time for bet resolution.
+ * Note: This will be a no-op if the bet was already resolved on task start.
+ */
+export const AutoResolveBetOnTaskComplete: Sync = ({ user, task, timeCompleted }) => ({
+  when: actions([TaskManager.markComplete, { user, task, timeCompleted }, {}]),
+  then: actions([MicroBet.resolveBet, { user, task, completionTime: timeCompleted }]),
 });
 

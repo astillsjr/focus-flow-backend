@@ -205,7 +205,11 @@ export const GetUserNudgesWithUser: Sync = ({ request, user, userId, status, lim
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert null to default values for optional parameters
+      if (limit in newFrame && newFrame[limit] === null) newFrame[limit] = 50;
+      // For status, null means "no filter" - keep as null (will be handled by concept method)
+      return newFrame;
     });
   },
   then: actions([NudgeEngine.getUserNudges, { user: userId, status, limit }]),
