@@ -19,7 +19,7 @@ import syncs from "@syncs";
  *   Logging.TRACE - display a trace of the actions.
  *   Logging.VERBOSE - display full record of synchronization.
  */
-Engine.logging = Logging.TRACE;
+Engine.logging = Logging.VERBOSE;
 
 // Register synchronizations
 Engine.register(syncs);

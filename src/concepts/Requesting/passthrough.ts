@@ -25,12 +25,9 @@
  */
 
 export const inclusions: Record<string, string> = {
-  // Feel free to delete these example inclusions
-  "/api/LikertSurvey/_getSurveyQuestions": "this is a public query",
-  "/api/LikertSurvey/_getSurveyResponses": "responses are public",
-  "/api/LikertSurvey/_getRespondentAnswers": "answers are visible",
-  "/api/LikertSurvey/submitResponse": "allow anyone to submit response",
-  "/api/LikertSurvey/updateResponse": "allow anyone to update their response",
+  // Public endpoints that don't require authentication
+  "/api/UserAuthentication/register": "Public registration endpoint - no authentication required",
+  "/api/UserAuthentication/login": "Public login endpoint - no authentication required",
 };
 
 /**
@@ -44,7 +41,65 @@ export const inclusions: Record<string, string> = {
  */
 
 export const exclusions: Array<string> = [
-  // Feel free to delete these example exclusions
-  "/api/LikertSurvey/createSurvey",
-  "/api/LikertSurvey/addQuestion",
+  // UserAuthentication - Actions requiring authentication/authorization
+  "/api/UserAuthentication/logout",
+  "/api/UserAuthentication/refreshAccessToken",
+  "/api/UserAuthentication/getUserInfo",
+  "/api/UserAuthentication/changePassword",
+  "/api/UserAuthentication/deleteAccount",
+
+  // TaskManager - All actions require user ownership verification
+  "/api/TaskManager/createTask",
+  "/api/TaskManager/updateTask",
+  "/api/TaskManager/markStarted",
+  "/api/TaskManager/markComplete",
+  "/api/TaskManager/deleteTask",
+  "/api/TaskManager/deleteUserTasks",
+  "/api/TaskManager/getTask",
+  "/api/TaskManager/getTasks",
+  "/api/TaskManager/getTaskStatus",
+
+  // MicroBet - All actions require user authorization
+  "/api/MicroBet/initializeBettor",
+  "/api/MicroBet/removeBettor",
+  "/api/MicroBet/placeBet",
+  "/api/MicroBet/cancelBet",
+  "/api/MicroBet/resolveBet", // BACKEND-ONLY: triggered by syncs
+  "/api/MicroBet/resolveExpiredBet", // BACKEND-ONLY: triggered by scheduled automation
+  "/api/MicroBet/getBet",
+  "/api/MicroBet/getActiveBets",
+  "/api/MicroBet/getExpiredBets",
+  "/api/MicroBet/getUserProfile",
+  "/api/MicroBet/getRecentActivity",
+
+  // EmotionLogger - All actions require user authorization
+  "/api/EmotionLogger/logBefore",
+  "/api/EmotionLogger/logAfter",
+  "/api/EmotionLogger/deleteTaskLogs",
+  "/api/EmotionLogger/deleteUserLogs",
+  "/api/EmotionLogger/analyzeRecentEmotions",
+  "/api/EmotionLogger/getEmotionsForTask",
+  "/api/EmotionLogger/getEmotionLogs",
+  "/api/EmotionLogger/getEmotionStats",
+
+  // NudgeEngine - All actions require user authorization
+  "/api/NudgeEngine/scheduleNudge",
+  "/api/NudgeEngine/cancelNudge",
+  "/api/NudgeEngine/deleteUserNudges",
+  "/api/NudgeEngine/nudgeUser", // BACKEND-ONLY: triggered automatically
+  "/api/NudgeEngine/getNudge",
+  "/api/NudgeEngine/getUserNudges",
+  "/api/NudgeEngine/getReadyNudges",
+
+  // Private helper methods (not meant to be public routes)
+  "/api/EmotionLogger/logPhase",
+  "/api/EmotionLogger/getUserLogs",
+  "/api/EmotionLogger/getLogsForTask",
+  "/api/EmotionLogger/buildAnalysisPrompt",
+  "/api/MicroBet/calculateReward",
+  "/api/NudgeEngine/buildPrompt",
+  "/api/NudgeEngine/validateMessage",
+  "/api/UserAuthentication/generateToken",
+  "/api/UserAuthentication/verifyToken",
+  "/api/UserAuthentication/isValidEmail",
 ];
