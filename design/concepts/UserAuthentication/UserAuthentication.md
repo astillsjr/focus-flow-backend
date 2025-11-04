@@ -11,6 +11,10 @@
     * a `createdAt` of type `Date`
     * a `refreshToken` of type `String?`  
       (present while logged in; absent when logged out)
+    * a `lastSeenNudgeTimestamp` of type `Date?`
+      (optional, tracks when last nudge was sent via SSE)
+    * a `lastSeenBetTimestamp` of type `Date?`
+      (optional, tracks when last bet event was sent via SSE)
 * **actions**:
   * `register (username: String, password: String, email: String): (accessToken: string, refreshToken: string)`
     * **requires**: The provided email and username must not already exist. The email must be in valid format.
@@ -33,3 +37,13 @@
   * `getUserInfo (accessToken: string): (user: { id: User, username: String, email: String })`
     * **requires**: A valid access token must be provided.
     * **effects**: Returns the user's ID, username, and email address.
+  * `hasActiveSession (user: User): (hasSession: Boolean)`
+    * **effects**: Returns true if the user has an active session (refresh token present), false otherwise.
+  * `getLastSeenNudgeTimestamp (user: User): (timestamp: Date?)`
+    * **effects**: Returns the timestamp when the last nudge was sent, or null if never sent.
+  * `getLastSeenBetTimestamp (user: User): (timestamp: Date?)`
+    * **effects**: Returns the timestamp when the last bet event was sent, or null if never sent.
+  * `updateLastSeenNudgeTimestamp (user: User, timestamp?: Date)`
+    * **effects**: Sets the lastSeenNudgeTimestamp to the provided timestamp (or current time if not provided).
+  * `updateLastSeenBetTimestamp (user: User, timestamp?: Date)`
+    * **effects**: Sets the lastSeenBetTimestamp to the provided timestamp (or current time if not provided).

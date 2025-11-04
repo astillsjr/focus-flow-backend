@@ -1,9 +1,6 @@
 import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import UserAuthenticationConcept from "./UserAuthenticationConcept.ts";
-import { ID } from "@utils/types.ts";
-
-
 
 Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", async (t) => {
   const [db, client] = await testDb();
@@ -25,7 +22,7 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
 
     // 2. Change password
     const change = await auth.changePassword({
-      accessToken: accessToken,
+      accessToken,
       oldPassword: "securePass1!",
       newPassword: "newSecure123",
     });
@@ -43,7 +40,7 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
       "Logout should not fail.",
     );
 
-    // 3. Log in with new password
+    // 4. Log in with new password
     const relog = await auth.login({
       username: "alice",
       password: "newSecure123",
@@ -67,7 +64,7 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
     );
 
     const userInDb = await auth.users.findOne({ username: "alice" });
-    assertEquals(userInDb, null);
+    assertEquals(userInDb, null, "User should be deleted from database.");
   });
 
   await t.step("Action: register requires unique email and username", async () => {
@@ -161,7 +158,7 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
 
     // Wrong old password
     const wrongPassChange = await auth.changePassword({
-      accessToken: accessToken,
+      accessToken,
       oldPassword: "wrong",
       newPassword: "newpass",
     });
@@ -189,20 +186,22 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
 
   await t.step("Query: user info requires authentication", async () => {
     const registration = await auth.register({
-      username: "alice",
+      username: "eve",
       password: "securePass1!",
-      email: "alice@example.com",
+      email: "eve@example.com",
     });
     assertNotEquals(
       "error" in registration,
       true,
       "User registration should not fail.",
     );
-    const { accessToken, refreshToken: _refreshToken } = registration as { accessToken: string, refreshToken: string };
+    const { accessToken } = registration as { accessToken: string, refreshToken: string };
 
     const info = await auth.getUserInfo({ accessToken });
     if (!("user" in info)) throw new Error(`getUserInfo failed: ${info.error}`);
-    assertEquals(info.user.username, "alice");
+    assertEquals(info.user.username, "eve");
+    assertEquals(info.user.email, "eve@example.com");
+    assertExists(info.user.id, "User ID should be present");
 
     const result = await auth.getUserInfo({ accessToken: "bad.token.value" });
     assertEquals(
@@ -210,6 +209,98 @@ Deno.test("UserAuthentication Concept - Operational Principle & Scenarios", asyn
       true,
       "Should fail when querying without authentication."
     );
+  });
+
+  await t.step("Action: refreshAccessToken requires valid refresh token", async () => {
+    const { refreshToken } = await auth.register({
+      username: "frank",
+      password: "refresh123!",
+      email: "frank@example.com",
+    }) as { accessToken: string, refreshToken: string };
+
+    const refresh = await auth.refreshAccessToken({ refreshToken });
+    assertNotEquals(
+      "error" in refresh,
+      true,
+      "Token refresh should succeed with valid refresh token."
+    );
+    assertExists((refresh as { accessToken: string }).accessToken, "New access token should be returned");
+
+    const invalidRefresh = await auth.refreshAccessToken({ refreshToken: "invalid.token" });
+    assertEquals(
+      "error" in invalidRefresh,
+      true,
+      "Should fail with invalid refresh token."
+    );
+  });
+
+  await t.step("Query: hasActiveSession checks for active session", async () => {
+    const registration = await auth.register({
+      username: "grace",
+      password: "session123!",
+      email: "grace@example.com",
+    });
+    const { accessToken } = registration as { accessToken: string, refreshToken: string };
+    const userInfo = await auth.getUserInfo({ accessToken });
+    if (!("user" in userInfo)) throw new Error(`getUserInfo failed: ${userInfo.error}`);
+    const userId = userInfo.user.id;
+
+    const hasSession = await auth.hasActiveSession({ user: userId });
+    assertEquals(hasSession, true, "User should have active session after registration.");
+
+    const { refreshToken } = registration as { accessToken: string, refreshToken: string };
+    await auth.logout({ refreshToken });
+
+    const noSession = await auth.hasActiveSession({ user: userId });
+    assertEquals(noSession, false, "User should not have active session after logout.");
+  });
+
+  await t.step("Query: timestamp methods track SSE event delivery", async () => {
+    const registration = await auth.register({
+      username: "henry",
+      password: "timestamp123!",
+      email: "henry@example.com",
+    });
+    const { accessToken } = registration as { accessToken: string, refreshToken: string };
+    const userInfo = await auth.getUserInfo({ accessToken });
+    if (!("user" in userInfo)) throw new Error(`getUserInfo failed: ${userInfo.error}`);
+    const userId = userInfo.user.id;
+
+    // Initially, timestamps should be null
+    const initialNudgeTs = await auth.getLastSeenNudgeTimestamp({ user: userId });
+    assertEquals(initialNudgeTs, null, "Initial nudge timestamp should be null");
+
+    const initialBetTs = await auth.getLastSeenBetTimestamp({ user: userId });
+    assertEquals(initialBetTs, null, "Initial bet timestamp should be null");
+
+    // Update nudge timestamp
+    const nudgeTimestamp = new Date(Date.now() - 60000);
+    await auth.updateLastSeenNudgeTimestamp({ user: userId, timestamp: nudgeTimestamp });
+    const updatedNudgeTs = await auth.getLastSeenNudgeTimestamp({ user: userId });
+    assertExists(updatedNudgeTs, "Updated nudge timestamp should exist");
+    assertEquals(updatedNudgeTs?.getTime(), nudgeTimestamp.getTime(), "Nudge timestamp should match");
+
+    // Update bet timestamp (without specifying, should use current time)
+    const beforeUpdate = Date.now();
+    await auth.updateLastSeenBetTimestamp({ user: userId });
+    const afterUpdate = Date.now();
+    const updatedBetTs = await auth.getLastSeenBetTimestamp({ user: userId });
+    assertExists(updatedBetTs, "Updated bet timestamp should exist");
+    assertExists(updatedBetTs?.getTime(), "Bet timestamp should be set");
+    // Timestamp should be between before and after (allowing some margin)
+    if (updatedBetTs) {
+      assertEquals(
+        updatedBetTs.getTime() >= beforeUpdate && updatedBetTs.getTime() <= afterUpdate,
+        true,
+        "Bet timestamp should be set to current time when not specified"
+      );
+    }
+
+    // Update with specific timestamp
+    const betTimestamp = new Date(Date.now() - 30000);
+    await auth.updateLastSeenBetTimestamp({ user: userId, timestamp: betTimestamp });
+    const specificBetTs = await auth.getLastSeenBetTimestamp({ user: userId });
+    assertEquals(specificBetTs?.getTime(), betTimestamp.getTime(), "Bet timestamp should match provided value");
   });
 
   // Clean up test DB
