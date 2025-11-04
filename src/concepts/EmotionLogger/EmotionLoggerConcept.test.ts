@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import EmotionLoggerConcept from "./EmotionLoggerConcept.ts";
 import { ID } from "@utils/types.ts";
@@ -78,9 +78,9 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
     assertEquals(mostCommonEmotion, Emotion.Motivated, "Most common emotion should be 'motivated'.");
     assertEquals(leastCommonEmotion, Emotion.Anxious, "Least common emotion should be 'anxious'.");
 
-    // Phase breakdown should match
+    // Average emotions per day should be 2 (2 logs in 1 day)
     assertEquals(averageEmotionsPerDay, 2, "Average emotions per day should be 2.");
-    assertEquals(recentTrend, "insufficient_data", "There should be enough logs for a recent trend.");
+    assertEquals(recentTrend, "insufficient_data", "Recent trend should be insufficient_data with only 2 logs.");
   });
 
   await t.step("Action: logging prohibits duplicates in the same phase", async () => {
@@ -89,7 +89,11 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
       task,
       emotion: Emotion.Neutral,
     });
-    assertEquals("error" in dup, true);
+    assertEquals(
+      "error" in dup,
+      true,
+      "Logging duplicate before emotion should fail.",
+    );
     assertEquals(
       (dup as { error: string }).error,
       "A log in the before phase already exists for this task",
@@ -98,20 +102,36 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
 
   await t.step("Action: delete task logs removes all logs for a task", async () => {
     const beforeDelete = await emotions.logs.find({ user, task }).toArray();
-    assertEquals(beforeDelete.length, 2);
+    assertEquals(
+      beforeDelete.length,
+      2,
+      "Should have 2 logs before deletion.",
+    );
 
     const del = await emotions.deleteTaskLogs({ user, task });
-    assertEquals("error" in del, false);
+    assertEquals(
+      "error" in del,
+      false,
+      "deleteTaskLogs should succeed.",
+    );
 
     const afterDelete = await emotions.logs.find({ user, task }).toArray();
-    assertEquals(afterDelete.length, 0);
+    assertEquals(
+      afterDelete.length,
+      0,
+      "All logs for the task should be deleted.",
+    );
   });
 
   await t.step("Action: trends should fail with no logs", async () => {
     const result = await emotions.getEmotionStats({
       user: "user:Ghost" as ID,
     });
-    assertEquals("error" in result, true);
+    assertEquals(
+      "error" in result,
+      true,
+      "getEmotionStats should fail for user with no logs.",
+    );
     assertEquals(
       (result as { error: string }).error,
       "No emotion logs found",
@@ -135,13 +155,25 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
     }
 
     const beforeDel = await emotions.logs.find({ user }).toArray();
-    assertEquals(beforeDel.length, 6);
+    assertEquals(
+      beforeDel.length,
+      6,
+      "Should have 6 logs before deletion (3 tasks × 2 phases).",
+    );
 
     const del = await emotions.deleteUserLogs({ user });
-    assertEquals("error" in del, false);
+    assertEquals(
+      "error" in del,
+      false,
+      "deleteUserLogs should succeed.",
+    );
 
     const afterDel = await emotions.logs.find({ user }).toArray();
-    assertEquals(afterDel.length, 0);
+    assertEquals(
+      afterDel.length,
+      0,
+      "All user logs should be deleted.",
+    );
   });
 
   await t.step("Action: multiple users should log freely", async () => {
@@ -159,12 +191,191 @@ Deno.test("EmotionLogger Concept - Operational Principle & Scenarios", async (t)
       emotion: Emotion.Neutral,
     });
 
-    assertEquals("error" in beforeLiam, false);
-    assertEquals("error" in afterLiam, false);
+    assertEquals(
+      "error" in beforeLiam,
+      false,
+      "Logging before emotion for different user should succeed.",
+    );
+    assertEquals(
+      "error" in afterLiam,
+      false,
+      "Logging after emotion for different user should succeed.",
+    );
 
     const liamLogs = await emotions.logs.find({ user: user2 }).toArray();
-    assertEquals(liamLogs.length, 2);
-    assertEquals(liamLogs[0].user, user2);
+    assertEquals(
+      liamLogs.length,
+      2,
+      "User2 should have 2 logs.",
+    );
+    assertEquals(
+      liamLogs[0].user,
+      user2,
+      "All logs should belong to user2.",
+    );
+  });
+
+  await t.step("Query: getEmotionsForTask returns emotions for a specific task", async () => {
+    const testUser = "user:Test" as ID;
+    const testTask = "task:Test" as ID;
+
+    await emotions.logBefore({
+      user: testUser,
+      task: testTask,
+      emotion: Emotion.Dreading,
+    });
+    await emotions.logAfter({
+      user: testUser,
+      task: testTask,
+      emotion: Emotion.Motivated,
+    });
+
+    const result = await emotions.getEmotionsForTask({ user: testUser, task: testTask });
+    assertEquals(
+      result.task,
+      testTask,
+      "Returned task should match requested task.",
+    );
+    assertEquals(
+      result.emotions.before,
+      Emotion.Dreading,
+      "Before emotion should match logged emotion.",
+    );
+    assertEquals(
+      result.emotions.after,
+      Emotion.Motivated,
+      "After emotion should match logged emotion.",
+    );
+  });
+
+  await t.step("Query: getEmotionLogs returns paginated and filtered logs", async () => {
+    const testUser = "user:Pagination" as ID;
+    const tasks = ["task:1", "task:2", "task:3"] as ID[];
+
+    // Create multiple logs
+    for (const task of tasks) {
+      await emotions.logBefore({
+        user: testUser,
+        task,
+        emotion: Emotion.Neutral,
+      });
+      await emotions.logAfter({
+        user: testUser,
+        task,
+        emotion: Emotion.Motivated,
+      });
+    }
+
+    // Test pagination
+    const page1 = await emotions.getEmotionLogs({
+      user: testUser,
+      page: 1,
+      limit: 3,
+    });
+    assertNotEquals(
+      "error" in page1,
+      true,
+      "getEmotionLogs should succeed.",
+    );
+    const page1Result = page1 as { logs: { _id: ID }[]; total: number; page: number; totalPages: number };
+    assertEquals(
+      page1Result.logs.length,
+      3,
+      "First page should return 3 logs.",
+    );
+    assertEquals(
+      page1Result.total,
+      6,
+      "Total logs should be 6.",
+    );
+    assertEquals(
+      page1Result.page,
+      1,
+      "Page number should be 1.",
+    );
+
+    // Test filtering by phase
+    const beforeLogs = await emotions.getEmotionLogs({
+      user: testUser,
+      phase: "before",
+    });
+    assertNotEquals(
+      "error" in beforeLogs,
+      true,
+      "Filtering by phase should succeed.",
+    );
+    const beforeResult = beforeLogs as { logs: { phase: string }[] };
+    assertEquals(
+      beforeResult.logs.every((log) => log.phase === "before"),
+      true,
+      "All logs should be in 'before' phase.",
+    );
+
+    // Test filtering by emotion
+    const motivatedLogs = await emotions.getEmotionLogs({
+      user: testUser,
+      emotion: Emotion.Motivated,
+    });
+    assertNotEquals(
+      "error" in motivatedLogs,
+      true,
+      "Filtering by emotion should succeed.",
+    );
+    const motivatedResult = motivatedLogs as { logs: { emotion: Emotion }[] };
+    assertEquals(
+      motivatedResult.logs.every((log) => log.emotion === Emotion.Motivated),
+      true,
+      "All logs should have 'motivated' emotion.",
+    );
+  });
+
+  await t.step("Query: analyzeRecentEmotions generates AI analysis", async () => {
+    const testUser = "user:Analysis" as ID;
+    const testTask = "task:Analysis" as ID;
+
+    // Create some logs for analysis
+    await emotions.logBefore({
+      user: testUser,
+      task: testTask,
+      emotion: Emotion.Anxious,
+    });
+    await emotions.logAfter({
+      user: testUser,
+      task: testTask,
+      emotion: Emotion.Motivated,
+    });
+
+    const result = await emotions.analyzeRecentEmotions({ user: testUser });
+    assertNotEquals(
+      "error" in result,
+      true,
+      "analyzeRecentEmotions should succeed with logs present.",
+    );
+    const analysisResult = result as { analysis: string };
+    assertNotEquals(
+      analysisResult.analysis.length,
+      0,
+      "Analysis should not be empty.",
+    );
+    assertNotEquals(
+      analysisResult.analysis,
+      "",
+      "Analysis should contain text.",
+    );
+
+    // Test with no logs
+    const noLogsResult = await emotions.analyzeRecentEmotions({
+      user: "user:NoLogs" as ID,
+    });
+    assertEquals(
+      "error" in noLogsResult,
+      true,
+      "analyzeRecentEmotions should fail for user with no logs.",
+    );
+    assertEquals(
+      (noLogsResult as { error: string }).error,
+      "No recent emotion logs found for this user.",
+    );
   });
 
   await client.close();

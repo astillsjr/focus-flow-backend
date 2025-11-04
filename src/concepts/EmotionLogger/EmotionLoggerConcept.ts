@@ -16,7 +16,7 @@ const PREFIX = "EmotionLogger" + ".";
 type User = ID;
 type Task = ID;
 
-// Define the types for our entires based on the concept state
+// Define the types for our entries based on the concept state
 type Log = ID;
 export type Phase = "before" | "after";
 
@@ -26,6 +26,7 @@ export type Phase = "before" | "after";
  *   a task Task
  *   a phase String
  *   a emotion Emotion
+ *   a createdAt Date
  */
 interface LogDoc {
   _id: Log;
@@ -36,6 +37,10 @@ interface LogDoc {
   createdAt: Date;
 }
 
+/**
+ * @concept EmotionLogger
+ * @purpose To track and analyze user emotions before and after task completion, enabling self-awareness and emotional pattern recognition.
+ */
 export default class EmotionLoggerConcept {
   logs: Collection<LogDoc>;
   llm: GeminiLLM;
@@ -107,7 +112,7 @@ export default class EmotionLoggerConcept {
    * @effects Removes all logs associated with the specified task for the given user.
    */
   public async deleteTaskLogs(
-    { user, task }: { user: User, task:Task },
+    { user, task }: { user: User, task: Task },
   ): Promise<Empty> {
     await this.logs.deleteMany({ user, task });
     return {};
@@ -118,7 +123,7 @@ export default class EmotionLoggerConcept {
    * @effects Removes every emotion log associated with the given user.
    */
   public async deleteUserLogs(
-    { user }: { user:User },
+    { user }: { user: User },
   ): Promise<Empty> {
     await this.logs.deleteMany({ user });
     return {};
@@ -303,7 +308,7 @@ export default class EmotionLoggerConcept {
 
   /**
    * Retrieves emotion logs for a specific task.
-   * @effects @effects Returns all logs for the specified user and task, ordered chronologically.
+   * @effects Returns all logs for the specified user and task, ordered chronologically.
    */
   private getLogsForTask(
     { user, task }: { user: User; task: Task }
