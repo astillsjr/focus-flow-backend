@@ -782,7 +782,7 @@ export const AutoCascadeDeleteOnTaskDelete: Sync = ({ user, task }) => ({
   when: actions([TaskManager.deleteTask, { user, task }, {}]),
   then: actions(
     [MicroBet.cancelBet, { user, task }],
-    [NudgeEngine.deleteNudgeForTask, { user, task }],
+    [NudgeEngine.cancelNudge, { user, task, force: true }],
     [EmotionLogger.deleteTaskLogs, { user, task }],
   ),
 });

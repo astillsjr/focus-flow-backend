@@ -8,14 +8,15 @@
     * a `user` of type `User`
     * a `task` of type `Task`
     * a `deliveryTime` of type `Date`
-    * a `triggered` of type `Boolean`
+    * a `triggeredAt` of type `Date` (null when not yet triggered)
+    * a `message` of type `String` (optional, set when nudge is triggered)
 * **actions**:
   * `scheduleNudge (user: User, task: Task, deliveryTime: Date): (nudge: Nudge)`
     * **requires**: No existing nudge must exist for the same task. The delivery time must be in the future.
     * **effects**: Creates a new nudge record associated with the task and user.
-  * `cancelNudge (user: User, task: Task)`
-    * **requires**: The nudge must exist and must not already be triggered.
-    * **effects**: Deletes the nudge, preventing future delivery.
+  * `cancelNudge (user: User, task: Task, force?: Boolean)`
+    * **requires**: The nudge must exist. If `force` is false (default), the nudge must not already be triggered.
+    * **effects**: Deletes the nudge, preventing future delivery. When `force` is true, deletes the nudge even if it has been triggered (for cleanup operations).
   * `deleteUserNudges (user: User)`
     * **effects**: Removes every nudge targeted at the specified user.
   * `nudgeUser (user: User, task: Task, title: String, description: String, recentEmotions: Emotion[]): (message: String, nudge: Nudge)`
@@ -27,4 +28,10 @@
   * `getUserNudges (user: User, status?: "pending" | "triggered", limit?: Number): (nudges: NudgeDoc[])`
     * **effects**: Returns the user's nudges filtered by status (pending or triggered).
   * `getReadyNudges (user: User): (nudges: NudgeDoc[])`
-    * **effects**: Returns nudges whose delivery time has arrived and are not yet triggered. 
+    * **effects**: Returns nudges whose delivery time has arrived and are not yet triggered.
+  * `getReadyNudgesSince (user: User, sinceTimestamp: Date): (nudges: NudgeDoc[])`
+    * **effects**: Returns nudges whose delivery time is after the given timestamp, delivery time has arrived, and are not yet triggered.
+  * `getNewTriggeredNudges (user: User, afterTimestamp: Date, limit?: Number): (nudges: NudgeDoc[])`
+    * **effects**: Returns nudges that were triggered after the specified timestamp.
+  * `getLastTriggeredTimestamp (user: User): (timestamp: Date | null)`
+    * **effects**: Returns the most recent triggered nudge timestamp for a user, used to initialize incremental queries.

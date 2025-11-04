@@ -1,4 +1,4 @@
-import { Collection, Db, MongoServerError  } from "npm:mongodb";
+import { Collection, Db, MongoServerError } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
 import { GeminiLLM } from '@utils/gemini-llm.ts';
@@ -16,7 +16,7 @@ const PREFIX = "NudgeEngine" + ".";
 type User = ID;
 type Task = ID;
 
-// Define the types for our entires based on the concept state
+// Define the types for our entries based on the concept state
 type Nudge = ID;
 
 /**
@@ -50,12 +50,12 @@ export default class NudgeEngineConcept {
     this.llm = new GeminiLLM(GEMINI_API_KEY!);
 
     this.nudges.createIndex({ user: 1, task: 1 }, { unique: true }).catch((err) => {
-      console.error("Failed to create nudges index:", err)
+      console.error("Failed to create nudges index:", err);
     });
     
     // Index for efficient triggered nudge queries
     this.nudges.createIndex({ user: 1, triggeredAt: 1 }).catch((err) => {
-      console.error("Failed to create triggeredAt index:", err)
+      console.error("Failed to create triggeredAt index:", err);
     });
   }
 
@@ -93,33 +93,19 @@ export default class NudgeEngineConcept {
 
   /**
    * Cancels a scheduled nudge.
-   * @requires The nudge must exist and must not already be triggered.
+   * @requires The nudge must exist. If `force` is false, the nudge must not already be triggered.
    * @effects Deletes the nudge from the database, preventing future delivery.
+   *          When `force` is true, deletes the nudge even if it has been triggered (for cleanup operations).
    */
   public async cancelNudge(
-    { user, task }: { user: User, task: Task },
+    { user, task, force = false }: { user: User, task: Task, force?: boolean },
   ): Promise<Empty | { error: string }> {
     const nudgeDoc = await this.nudges.findOne({ user, task });
     if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
 
-    if (nudgeDoc.triggeredAt !== null) return { error: "Nudge has already been triggered" };
-
-    await this.nudges.deleteOne({ _id: nudgeDoc._id });
-
-    return {};
-  }
-
-  /**
-   * Deletes a nudge for a specific task, regardless of whether it has been triggered.
-   * This is used for cleanup operations like task deletion.
-   * @requires The nudge must exist for the specified user and task.
-   * @effects Removes the nudge from the database, even if it has been triggered.
-   */
-  public async deleteNudgeForTask(
-    { user, task }: { user: User, task: Task },
-  ): Promise<Empty | { error: string }> {
-    const nudgeDoc = await this.nudges.findOne({ user, task });
-    if (!nudgeDoc) return { error: "Nudge for this task does not exist" };
+    if (!force && nudgeDoc.triggeredAt !== null) {
+      return { error: "Nudge has already been triggered" };
+    }
 
     await this.nudges.deleteOne({ _id: nudgeDoc._id });
 
@@ -131,7 +117,7 @@ export default class NudgeEngineConcept {
    * @effects Removes every nudge targeted at the specified user.
    */
   public async deleteUserNudges(
-    { user }: { user: User},
+    { user }: { user: User },
   ): Promise<Empty> {
     await this.nudges.deleteMany({ user });
 
