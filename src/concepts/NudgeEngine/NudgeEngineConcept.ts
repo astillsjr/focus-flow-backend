@@ -52,6 +52,11 @@ export default class NudgeEngineConcept {
     this.nudges.createIndex({ user: 1, task: 1 }, { unique: true }).catch((err) => {
       console.error("Failed to create nudges index:", err)
     });
+    
+    // Index for efficient triggered nudge queries
+    this.nudges.createIndex({ user: 1, triggeredAt: 1 }).catch((err) => {
+      console.error("Failed to create triggeredAt index:", err)
+    });
   }
 
   /**
@@ -245,6 +250,59 @@ export default class NudgeEngineConcept {
       .sort({ deliveryTime: 1 })
       .toArray();
     return { nudges };
+  }
+
+  /**
+   * Retrieves triggered nudges newer than a given timestamp.
+   * @effects Returns nudges that were triggered after the specified timestamp.
+   */
+  public async getNewTriggeredNudges(
+    { 
+      user, 
+      afterTimestamp,
+      limit = 50 
+    }: { 
+      user: User; 
+      afterTimestamp: Date;
+      limit?: number;
+    }
+  ): Promise<{ nudges: NudgeDoc[] }> {
+    const nudges = await this.nudges
+      .find({
+        user,
+        triggeredAt: { 
+          $ne: null,
+          $gt: afterTimestamp 
+        },
+        message: { $exists: true, $ne: null } // Only nudges with messages
+      })
+      .sort({ triggeredAt: 1 }) // Oldest first
+      .limit(limit)
+      .toArray();
+    
+    return { nudges };
+  }
+
+  /**
+   * Retrieves the most recent triggered nudge timestamp for a user.
+   * Used to initialize incremental queries.
+   */
+  public async getLastTriggeredTimestamp(
+    { user }: { user: User }
+  ): Promise<Date | null> {
+    const lastNudge = await this.nudges
+      .findOne(
+        { 
+          user, 
+          triggeredAt: { $ne: null } 
+        },
+        { 
+          sort: { triggeredAt: -1 },
+          projection: { triggeredAt: 1 }
+        }
+      );
+    
+    return lastNudge?.triggeredAt || null;
   }
 
   /**

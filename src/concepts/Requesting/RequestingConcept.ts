@@ -333,15 +333,19 @@ export function startRequestingServer(
 
     const userId = userInfo.user.id;
 
-    // Track which nudges we've already sent to avoid duplicates
-    const sentNudges = new Set<string>();
-
     // Set up SSE stream
     return streamSSE(c, async (stream) => {
-      // Clean up on disconnect - define early so it can be used throughout
       let isCleanedUp = false;
       let checkInterval: number | undefined;
       let heartbeatInterval: number | undefined;
+      
+      // Track last seen timestamp for incremental queries
+      // Initialize to 1 hour ago to catch recent nudges on connection
+      let lastSeenTimestamp = new Date(Date.now() - 60 * 60 * 1000);
+      
+      // Track sent nudge IDs to avoid duplicates (bounded to last 100)
+      const sentNudges = new Set<string>();
+      const SENT_NUDGES_MAX_SIZE = 100;
       
       const cleanup = () => {
         if (isCleanedUp) return;
@@ -367,40 +371,40 @@ export function startRequestingServer(
       const connected = await safeWriteSSE({ 
         data: JSON.stringify({ type: "connected", message: "Nudge stream connected" }) 
       });
-      if (!connected) return; // Client disconnected immediately
+      if (!connected) return;
 
-      // Send backlog of recently triggered nudges (last 24 hours) that client might have missed
+      // Send limited backlog of recent nudges (last hour, max 10)
       try {
-        const recentTriggeredNudgesResult = await NudgeEngine.getUserNudges({ 
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const backlogResult = await NudgeEngine.getNewTriggeredNudges({ 
           user: userId, 
-          status: "triggered",
-          limit: 50 
+          afterTimestamp: oneHourAgo,
+          limit: 10  // Reduced from 50 to 10
         });
 
-        if ("nudges" in recentTriggeredNudgesResult) {
-          // Filter to only nudges triggered in the last 24 hours and that have messages
-          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-          const recentNudges = recentTriggeredNudgesResult.nudges
-            .filter((nudge) => {
-              // Check if nudge was triggered recently using triggeredAt timestamp
-              // Also ensure it has a message (meaning it was successfully triggered)
-              return nudge.triggeredAt !== null && 
-                     nudge.triggeredAt >= oneDayAgo && 
-                     nudge.message;
-            })
-            .sort((a, b) => {
-              // Sort by triggeredAt (most recent first), fallback to deliveryTime if triggeredAt is null
-              const aTime = a.triggeredAt?.getTime() ?? a.deliveryTime.getTime();
-              const bTime = b.triggeredAt?.getTime() ?? b.deliveryTime.getTime();
-              return bTime - aTime;
-            });
+        if ("nudges" in backlogResult && backlogResult.nudges.length > 0) {
+          // Sort by triggeredAt (most recent first)
+          const sortedNudges = backlogResult.nudges.sort((a, b) => {
+            const aTime = a.triggeredAt?.getTime() ?? 0;
+            const bTime = b.triggeredAt?.getTime() ?? 0;
+            return bTime - aTime;
+          });
 
-          // Send backlog to client
-          for (const nudge of recentNudges) {
-            if (isCleanedUp) return; // Client disconnected
+          for (const nudge of sortedNudges) {
+            if (isCleanedUp) return;
             
-            // Mark as sent to avoid duplicates
             sentNudges.add(nudge._id);
+            
+            // Bound the Set size to prevent memory bloat
+            if (sentNudges.size > SENT_NUDGES_MAX_SIZE) {
+              const firstId = sentNudges.values().next().value;
+              sentNudges.delete(firstId);
+            }
+            
+            // Update last seen timestamp
+            if (nudge.triggeredAt && nudge.triggeredAt > lastSeenTimestamp) {
+              lastSeenTimestamp = nudge.triggeredAt;
+            }
 
             const success = await safeWriteSSE({
               data: JSON.stringify({
@@ -413,35 +417,30 @@ export function startRequestingServer(
                 },
               }),
             });
-            if (!success) return; // Client disconnected
+            if (!success) return;
           }
 
-          if (recentNudges.length > 0) {
-            console.log(`[SSE] Sent ${recentNudges.length} backlog nudges to user ${userId}`);
-          }
+          console.log(`[SSE] Sent ${sortedNudges.length} backlog nudges to user ${userId}`);
         }
       } catch (error) {
         console.error("[SSE] Error sending backlog nudges:", error);
-        // If client disconnected, cleanup will have been called
         if (isCleanedUp) return;
       }
 
-      // Set up periodic checking for newly triggered nudges
-      // The background scheduler is responsible for triggering nudges.
-      // This endpoint only delivers notifications to connected clients.
+      // Set up periodic checking with incremental queries
       checkInterval = setInterval(async () => {
         if (isCleanedUp) return;
         
         try {
-          // Check for triggered nudges that we haven't sent yet
-          const triggeredNudgesResult = await NudgeEngine.getUserNudges({ 
+          // Only fetch nudges triggered AFTER lastSeenTimestamp
+          const newNudgesResult = await NudgeEngine.getNewTriggeredNudges({ 
             user: userId, 
-            status: "triggered",
-            limit: 50 
+            afterTimestamp: lastSeenTimestamp,
+            limit: 20  // Reasonable limit for incremental updates
           });
           
-          if ("nudges" in triggeredNudgesResult) {
-            for (const nudge of triggeredNudgesResult.nudges) {
+          if ("nudges" in newNudgesResult && newNudgesResult.nudges.length > 0) {
+            for (const nudge of newNudgesResult.nudges) {
               if (isCleanedUp) return;
               
               // Skip if we've already sent this nudge
@@ -449,9 +448,20 @@ export function startRequestingServer(
                 continue;
               }
               
-              // Only send nudges that have messages (successfully triggered)
-              if (nudge.message) {
+              // Ensure it has a message (successfully triggered)
+              if (nudge.message && nudge.triggeredAt) {
                 sentNudges.add(nudge._id);
+                
+                // Bound the Set size
+                if (sentNudges.size > SENT_NUDGES_MAX_SIZE) {
+                  const firstId = sentNudges.values().next().value;
+                  sentNudges.delete(firstId);
+                }
+                
+                // Update last seen timestamp
+                if (nudge.triggeredAt > lastSeenTimestamp) {
+                  lastSeenTimestamp = nudge.triggeredAt;
+                }
                 
                 const success = await safeWriteSSE({
                   data: JSON.stringify({
@@ -465,21 +475,20 @@ export function startRequestingServer(
                   }),
                 });
                 
-                if (!success) return; // Client disconnected, exit
+                if (!success) return;
                 
-                console.log(`[SSE] Sent nudge ${nudge._id} to user ${userId}`);
+                console.log(`[SSE] Sent new nudge ${nudge._id} to user ${userId}`);
               }
             }
           }
         } catch (error) {
           console.error("[SSE] Error checking for triggered nudges:", error);
-          // Try to send error to client, but if it fails, cleanup
           const success = await safeWriteSSE({
             data: JSON.stringify({ type: "error", message: "Error checking for nudges" }),
           });
           if (!success) return;
         }
-      }, 5000); // Check every 5 seconds for new triggers
+      }, 5000); // Check every 5 seconds
 
       // Send heartbeat every 30 seconds to keep connection alive
       heartbeatInterval = setInterval(async () => {
