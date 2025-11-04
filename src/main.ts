@@ -12,7 +12,6 @@ const { Engine } = concepts;
 import { Logging } from "@engine";
 import { startRequestingServer } from "@concepts/Requesting/RequestingConcept.ts";
 import syncs from "@syncs";
-import { startNudgeScheduler } from "./background/nudgeScheduler.ts";
 
 /**
  * Available logging levels:
@@ -26,7 +25,5 @@ Engine.logging = Logging.VERBOSE;
 Engine.register(syncs);
 
 // Start a server to provide the Requesting concept with external/system actions.
+// Note: Nudge triggering is now handled by SSE connections, no background scheduler needed.
 startRequestingServer(concepts);
-
-// Start background scheduler for automatic nudge processing
-startNudgeScheduler();

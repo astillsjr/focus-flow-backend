@@ -314,9 +314,9 @@ export function startRequestingServer(
       return c.json({ error: "Authentication required. Provide accessToken in query or Authorization header." }, 401);
     }
 
-    // Authenticate user
-    const { UserAuthentication, NudgeEngine } = concepts;
-    if (!UserAuthentication || !NudgeEngine) {
+    // Authenticate user and get required concepts
+    const { UserAuthentication, NudgeEngine, TaskManager, EmotionLogger } = concepts;
+    if (!UserAuthentication || !NudgeEngine || !TaskManager || !EmotionLogger) {
       return c.json({ error: "Required concepts not available." }, 500);
     }
 
@@ -339,20 +339,18 @@ export function startRequestingServer(
       let checkInterval: number | undefined;
       let heartbeatInterval: number | undefined;
       
-      // Track last seen timestamp for incremental queries
-      // Initialize to 1 hour ago to catch recent nudges on connection
-      let lastSeenTimestamp = new Date(Date.now() - 60 * 60 * 1000);
-      
-      // Track sent nudge IDs to avoid duplicates (bounded to last 100)
-      const sentNudges = new Set<string>();
-      const SENT_NUDGES_MAX_SIZE = 100;
+      // Get user's last seen timestamp from UserAuthentication
+      let lastSeenTimestamp = await UserAuthentication.getLastSeenNudgeTimestamp({ user: userId });
+      // If no lastSeen, initialize to 1 hour ago to catch recent nudges
+      if (!lastSeenTimestamp) {
+        lastSeenTimestamp = new Date(Date.now() - 60 * 60 * 1000);
+      }
       
       const cleanup = () => {
         if (isCleanedUp) return;
         isCleanedUp = true;
         if (checkInterval) clearInterval(checkInterval);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
-        sentNudges.clear();
       };
 
       // Helper function to safely write to stream and detect disconnection
@@ -367,126 +365,217 @@ export function startRequestingServer(
         }
       };
 
+      // Helper function to trigger and send a nudge
+      const triggerAndSendNudge = async (nudge: { _id: string; task: string; deliveryTime: Date }) => {
+        if (isCleanedUp) return false;
+
+        try {
+          // Get task details needed to trigger the nudge
+          const taskResult = await TaskManager.getTask({ user: userId, task: nudge.task });
+          if ("error" in taskResult) {
+            console.error(`[SSE] Failed to get task ${nudge.task} for nudge ${nudge._id}:`, taskResult.error);
+            return false;
+          }
+
+          // Get recent emotions
+          const emotionsResult = await EmotionLogger.analyzeRecentEmotions({ user: userId });
+          const recentEmotions = "emotions" in emotionsResult ? emotionsResult.emotions : [];
+
+          // Trigger the nudge to generate message
+          const nudgeResult = await NudgeEngine.nudgeUser({
+            user: userId,
+            task: nudge.task,
+            title: taskResult.title,
+            description: taskResult.description || "",
+            recentEmotions,
+          });
+
+          if ("error" in nudgeResult) {
+            // If nudge was already triggered (race condition), that's fine
+            if (nudgeResult.error?.includes("already been triggered")) {
+              console.log(`[SSE] Nudge ${nudge._id} already triggered, skipping`);
+              return false;
+            }
+            console.error(`[SSE] Failed to trigger nudge ${nudge._id}:`, nudgeResult.error);
+            return false;
+          }
+
+          // Send the nudge via SSE
+          const success = await safeWriteSSE({
+            data: JSON.stringify({
+              type: "nudge",
+              nudge: {
+                _id: nudgeResult.nudge,
+                task: nudge.task,
+                deliveryTime: nudge.deliveryTime,
+                message: nudgeResult.message,
+              },
+            }),
+          });
+
+          if (success) {
+            // Update lastSeen timestamp to the delivery time (always move forward, never backward)
+            if (nudge.deliveryTime > lastSeenTimestamp) {
+              lastSeenTimestamp = nudge.deliveryTime;
+              // Persist the lastSeen timestamp
+              await UserAuthentication.updateLastSeenNudgeTimestamp({ 
+                user: userId, 
+                timestamp: nudge.deliveryTime 
+              });
+            }
+
+            console.log(`[SSE] Triggered and sent nudge ${nudge._id} to user ${userId}`);
+          }
+
+          return success;
+        } catch (error) {
+          console.error(`[SSE] Error triggering nudge ${nudge._id}:`, error);
+          return false;
+        }
+      };
+
       // Send initial connection message
       const connected = await safeWriteSSE({ 
         data: JSON.stringify({ type: "connected", message: "Nudge stream connected" }) 
       });
       if (!connected) return;
 
-      // Send limited backlog of recent nudges (last hour, max 10)
+      // Handle backlog: get ready nudges since lastSeen and trigger them
+      // Also send any triggered nudges that were triggered after lastSeen (in case user disconnected before receiving)
       try {
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const backlogResult = await NudgeEngine.getNewTriggeredNudges({ 
+        // Get ready nudges that need to be triggered
+        const readyBacklogResult = await NudgeEngine.getReadyNudgesSince({ 
           user: userId, 
-          afterTimestamp: oneHourAgo,
-          limit: 10  // Reduced from 50 to 10
+          sinceTimestamp: lastSeenTimestamp
         });
 
-        if ("nudges" in backlogResult && backlogResult.nudges.length > 0) {
-          // Sort by triggeredAt (most recent first)
-          const sortedNudges = backlogResult.nudges.sort((a, b) => {
-            const aTime = a.triggeredAt?.getTime() ?? 0;
-            const bTime = b.triggeredAt?.getTime() ?? 0;
-            return bTime - aTime;
-          });
+        // Get triggered nudges that were sent after lastSeen (already have messages, just need to send)
+        const triggeredBacklogResult = await NudgeEngine.getNewTriggeredNudges({ 
+          user: userId, 
+          afterTimestamp: lastSeenTimestamp,
+          limit: 50
+        });
 
-          for (const nudge of sortedNudges) {
+        let totalProcessed = 0;
+
+        // First, send already-triggered nudges (they already have messages)
+        if ("nudges" in triggeredBacklogResult && triggeredBacklogResult.nudges.length > 0) {
+          for (const nudge of triggeredBacklogResult.nudges) {
             if (isCleanedUp) return;
             
-            sentNudges.add(nudge._id);
-            
-            // Bound the Set size to prevent memory bloat
-            if (sentNudges.size > SENT_NUDGES_MAX_SIZE) {
-              const firstId = sentNudges.values().next().value;
-              sentNudges.delete(firstId);
+            // Only send nudges whose deliveryTime is after lastSeen
+            // This prevents resending the last nudge we already sent
+            if (nudge.deliveryTime <= lastSeenTimestamp) {
+              continue; // Skip this nudge, we already sent it
             }
             
-            // Update last seen timestamp
-            if (nudge.triggeredAt && nudge.triggeredAt > lastSeenTimestamp) {
-              lastSeenTimestamp = nudge.triggeredAt;
-            }
+            if (nudge.message && nudge.triggeredAt) {
+              const success = await safeWriteSSE({
+                data: JSON.stringify({
+                  type: "nudge",
+                  nudge: {
+                    _id: nudge._id,
+                    task: nudge.task,
+                    deliveryTime: nudge.deliveryTime,
+                    message: nudge.message,
+                  },
+                }),
+              });
 
-            const success = await safeWriteSSE({
-              data: JSON.stringify({
-                type: "nudge",
-                nudge: {
-                  _id: nudge._id,
-                  task: nudge.task,
-                  deliveryTime: nudge.deliveryTime,
-                  message: nudge.message,
-                },
-              }),
-            });
-            if (!success) return;
+              if (success) {
+                // Update lastSeen if needed
+                if (nudge.deliveryTime > lastSeenTimestamp) {
+                  lastSeenTimestamp = nudge.deliveryTime;
+                  await UserAuthentication.updateLastSeenNudgeTimestamp({ 
+                    user: userId, 
+                    timestamp: nudge.deliveryTime 
+                  });
+                }
+                totalProcessed++;
+              } else {
+                return; // Client disconnected
+              }
+            }
           }
+        }
 
-          console.log(`[SSE] Sent ${sortedNudges.length} backlog nudges to user ${userId}`);
+        // Then, trigger ready nudges that haven't been triggered yet
+        if ("nudges" in readyBacklogResult && readyBacklogResult.nudges.length > 0) {
+          console.log(`[SSE] Found ${readyBacklogResult.nudges.length} ready nudges in backlog for user ${userId}`);
+          
+          // Process nudges in order (oldest first)
+          for (const nudge of readyBacklogResult.nudges) {
+            if (isCleanedUp) return;
+            const success = await triggerAndSendNudge(nudge);
+            if (success) {
+              totalProcessed++;
+            }
+          }
+        }
+
+        if (totalProcessed > 0) {
+          console.log(`[SSE] Processed ${totalProcessed} nudges in backlog for user ${userId}`);
         }
       } catch (error) {
-        console.error("[SSE] Error sending backlog nudges:", error);
+        console.error("[SSE] Error processing backlog nudges:", error);
         if (isCleanedUp) return;
       }
 
-      // Set up periodic checking with incremental queries
+      // Set up periodic checking for ready nudges
       checkInterval = setInterval(async () => {
         if (isCleanedUp) return;
         
+        // Re-verify authentication before processing nudges
+        // This ensures we stop if the user logged out
         try {
-          // Only fetch nudges triggered AFTER lastSeenTimestamp
-          const newNudgesResult = await NudgeEngine.getNewTriggeredNudges({ 
-            user: userId, 
-            afterTimestamp: lastSeenTimestamp,
-            limit: 20  // Reasonable limit for incremental updates
-          });
+          const currentUserInfo = await UserAuthentication.getUserInfo({ accessToken });
+          if ("error" in currentUserInfo) {
+            // Token is invalid (user logged out), cleanup and stop
+            console.log(`[SSE] User ${userId} authentication invalid, closing connection`);
+            cleanup();
+            return;
+          }
           
-          if ("nudges" in newNudgesResult && newNudgesResult.nudges.length > 0) {
-            for (const nudge of newNudgesResult.nudges) {
+          // Also check if user still has an active session (refreshToken exists)
+          // This catches logout even if access token is still valid
+          const hasSession = await UserAuthentication.hasActiveSession({ user: userId });
+          if (!hasSession) {
+            // User logged out (refreshToken was cleared), cleanup and stop
+            console.log(`[SSE] User ${userId} logged out, closing connection`);
+            cleanup();
+            return;
+          }
+        } catch (error) {
+          // Authentication check failed, cleanup and stop
+          console.log(`[SSE] Authentication check failed for user ${userId}, closing connection`);
+          cleanup();
+          return;
+        }
+        
+        try {
+          // Get ready nudges (not yet triggered)
+          const readyNudgesResult = await NudgeEngine.getReadyNudges({ user: userId });
+          
+          if ("nudges" in readyNudgesResult && readyNudgesResult.nudges.length > 0) {
+            // Process each ready nudge
+            for (const nudge of readyNudgesResult.nudges) {
               if (isCleanedUp) return;
-              
-              // Skip if we've already sent this nudge
-              if (sentNudges.has(nudge._id)) {
-                continue;
-              }
-              
-              // Ensure it has a message (successfully triggered)
-              if (nudge.message && nudge.triggeredAt) {
-                sentNudges.add(nudge._id);
-                
-                // Bound the Set size
-                if (sentNudges.size > SENT_NUDGES_MAX_SIZE) {
-                  const firstId = sentNudges.values().next().value;
-                  sentNudges.delete(firstId);
-                }
-                
-                // Update last seen timestamp
-                if (nudge.triggeredAt > lastSeenTimestamp) {
-                  lastSeenTimestamp = nudge.triggeredAt;
-                }
-                
-                const success = await safeWriteSSE({
-                  data: JSON.stringify({
-                    type: "nudge",
-                    nudge: {
-                      _id: nudge._id,
-                      task: nudge.task,
-                      deliveryTime: nudge.deliveryTime,
-                      message: nudge.message,
-                    },
-                  }),
-                });
-                
-                if (!success) return;
-                
-                console.log(`[SSE] Sent new nudge ${nudge._id} to user ${userId}`);
+              const success = await triggerAndSendNudge(nudge);
+              if (!success) {
+                // Connection died during trigger, cleanup already called
+                return;
               }
             }
           }
         } catch (error) {
-          console.error("[SSE] Error checking for triggered nudges:", error);
+          console.error("[SSE] Error checking for ready nudges:", error);
           const success = await safeWriteSSE({
             data: JSON.stringify({ type: "error", message: "Error checking for nudges" }),
           });
-          if (!success) return;
+          if (!success) {
+            // Connection failed, cleanup already called by safeWriteSSE
+            return;
+          }
         }
       }, 5000); // Check every 5 seconds
 
@@ -501,7 +590,6 @@ export function startRequestingServer(
       }, 30000);
 
       // Keep the connection alive - wait until cleanup is called
-      // The intervals will detect disconnection via write errors
       try {
         // Keep running until cleanup is called
         await new Promise<void>((resolve) => {

@@ -253,6 +253,35 @@ export default class NudgeEngineConcept {
   }
 
   /**
+   * Retrieves ready-to-deliver nudges for a user since a given timestamp.
+   * @effects Returns nudges whose delivery time is after the given timestamp, 
+   *          delivery time has arrived, and are not yet triggered.
+   */
+  public async getReadyNudgesSince(
+    { 
+      user, 
+      sinceTimestamp 
+    }: { 
+      user: User; 
+      sinceTimestamp: Date;
+    }
+  ): Promise<{ nudges: NudgeDoc[] }> {
+    const now = new Date();
+    const nudges = await this.nudges
+      .find({
+        user,
+        triggeredAt: null,
+        deliveryTime: { 
+          $lte: now,
+          $gt: sinceTimestamp
+        }
+      })
+      .sort({ deliveryTime: 1 })
+      .toArray();
+    return { nudges };
+  }
+
+  /**
    * Retrieves triggered nudges newer than a given timestamp.
    * @effects Returns nudges that were triggered after the specified timestamp.
    */

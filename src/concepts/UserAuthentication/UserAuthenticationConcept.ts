@@ -24,6 +24,7 @@ type User = ID;
  *   a passwordHash String
  *   a email String
  *   a createdAt Date
+ *   a lastSeenNudgeTimestamp Date (optional, tracks when last nudge was sent)
  */
 interface UserDoc {
   _id: User;
@@ -32,6 +33,7 @@ interface UserDoc {
   email: string;
   createdAt: Date;
   refreshToken?: string;
+  lastSeenNudgeTimestamp?: Date;
 }
 
 /**
@@ -239,6 +241,43 @@ export default class UserAuthenticationConcept {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Gets the last seen nudge timestamp for a user.
+   * Returns the timestamp when the last nudge was sent, or null if never sent.
+   */
+  public async getLastSeenNudgeTimestamp(
+    { user }: { user: User }
+  ): Promise<Date | null> {
+    const userDoc = await this.users.findOne({ _id: user });
+    return userDoc?.lastSeenNudgeTimestamp || null;
+  }
+
+  /**
+   * Updates the last seen nudge timestamp for a user.
+   * @effects Sets the lastSeenNudgeTimestamp to the provided timestamp (or current time if not provided).
+   */
+  public async updateLastSeenNudgeTimestamp(
+    { user, timestamp }: { user: User; timestamp?: Date }
+  ): Promise<Empty> {
+    const updateTimestamp = timestamp || new Date();
+    await this.users.updateOne(
+      { _id: user },
+      { $set: { lastSeenNudgeTimestamp: updateTimestamp } }
+    );
+    return {};
+  }
+
+  /**
+   * Checks if a user has an active session (has a refresh token).
+   * @effects Returns true if the user has an active session, false otherwise.
+   */
+  public async hasActiveSession(
+    { user }: { user: User }
+  ): Promise<boolean> {
+    const userDoc = await this.users.findOne({ _id: user });
+    return !!userDoc?.refreshToken;
   }
 
   /**
