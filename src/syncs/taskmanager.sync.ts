@@ -386,14 +386,22 @@ export const MarkStartedRequest: Sync = ({ request, accessToken, task, timeStart
 
 export const MarkStartedWithUser: Sync = ({ request, user, userId, task, timeStarted }) => ({
   when: actions(
-    [Requesting.request, { path: "/TaskManager/markStarted", task }, { request }],
+    [Requesting.request, { path: "/TaskManager/markStarted", task, timeStarted }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
   where: (frames) => {
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert timeStarted string to Date if it's a string
+      if (timeStarted in newFrame) {
+        const tsValue = newFrame[timeStarted];
+        if (typeof tsValue === 'string') {
+          newFrame[timeStarted] = new Date(tsValue);
+        }
+      }
+      return newFrame;
     });
   },
   then: actions([TaskManager.markStarted, { user: userId, task, timeStarted }]),
@@ -430,14 +438,22 @@ export const MarkCompleteRequest: Sync = ({ request, accessToken, task, timeComp
 
 export const MarkCompleteWithUser: Sync = ({ request, user, userId, task, timeCompleted }) => ({
   when: actions(
-    [Requesting.request, { path: "/TaskManager/markComplete", task }, { request }],
+    [Requesting.request, { path: "/TaskManager/markComplete", task, timeCompleted }, { request }],
     [UserAuthentication.getUserInfo, {}, { user }],
   ),
   where: (frames) => {
     return frames.map((frame) => {
       const userObj = frame[user] as { id: string } | undefined;
       if (!userObj) return frame;
-      return { ...frame, [userId]: userObj.id };
+      const newFrame = { ...frame, [userId]: userObj.id };
+      // Convert timeCompleted string to Date if it's a string
+      if (timeCompleted in newFrame) {
+        const tcValue = newFrame[timeCompleted];
+        if (typeof tcValue === 'string') {
+          newFrame[timeCompleted] = new Date(tcValue);
+        }
+      }
+      return newFrame;
     });
   },
   then: actions([TaskManager.markComplete, { user: userId, task, timeCompleted }]),
