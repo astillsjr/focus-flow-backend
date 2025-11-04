@@ -795,4 +795,3 @@ export const AutoCascadeDeleteOnTaskDelete: Sync = ({ user, task }) => ({
     [EmotionLogger.deleteTaskLogs, { user, task }],
   ),
 });
-
