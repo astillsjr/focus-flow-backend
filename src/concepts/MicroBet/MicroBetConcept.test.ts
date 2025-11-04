@@ -41,7 +41,7 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     assertEquals(
       placedBet.wager, 
       20,
-      "Incorrect stroage of bet wager."
+      "Incorrect storage of bet wager.",
     );
 
     // Check points deducted
@@ -111,8 +111,13 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
 
     // 5. View history
     const history = await bets.getRecentActivity({ user });
-    assertEquals(Array.isArray(history), true);
-    assertEquals((history as any[]).length >= 1, true);
+    assertNotEquals("error" in history, true, "getRecentActivity should succeed.");
+    const historyResult = history as { bets: { _id: ID }[] };
+    assertEquals(
+      historyResult.bets.length >= 1,
+      true,
+      "Should return at least one bet in history.",
+    );
   });
 
   await t.step("Action: time bonus rewards earlier bet deadlines", async () => {
@@ -186,12 +191,12 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     );
   });
   
-  await t.step("Action: initializng bettors prohibits duplicate users", async () => {
+  await t.step("Action: initializing bettors prohibits duplicate users", async () => {
     const duplicate = await bets.initializeBettor({ user });
     assertEquals(
       "error" in duplicate, 
       true,
-      "Initializng a duplicate user should fail."
+      "Initializing a duplicate user should fail.",
     );
     assertEquals(
       (duplicate as { error: string }).error,
@@ -217,7 +222,7 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     );
   });
 
-  await t.step("Action: bet placing prohibts duplicate bets and invalid deadlines", async () => {
+  await t.step("Action: bet placing prohibits duplicate bets and invalid deadlines", async () => {
     const task2 = "task:Duplicate" as ID;
     await bets.users.updateOne({ _id: user }, { $set: { points: 200 } });
 
@@ -258,7 +263,7 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     assertEquals(
       "error" in past,
       true,
-      "Placing a bet with an elasped due date should fail."
+      "Placing a bet with an elapsed deadline should fail.",
     );
     assertEquals(
       (past as { error: string }).error,
@@ -364,7 +369,7 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     assertEquals(
       beforeRemove.length >= 1, 
       true,
-      "Bettor should have a least one bet."
+      "Bettor should have at least one bet.",
     );
 
     const removal = await bets.removeBettor({ user });
@@ -384,7 +389,198 @@ Deno.test("MicroBet Concept - Operational Principle & Scenarios", async (t) => {
     assertEquals(
       betsAfterRemove.length, 
       0,
-      "User should have no bets after removal."
+      "User should have no bets after removal.",
+    );
+  });
+
+  await t.step("Query: getBet retrieves a specific bet", async () => {
+    const testUser = "user:Dave" as ID;
+    const testTask = "task:QueryTest" as ID;
+
+    await bets.initializeBettor({ user: testUser });
+    await bets.users.updateOne({ _id: testUser }, { $set: { points: 100 } });
+
+    const placed = await bets.placeBet({
+      user: testUser,
+      task: testTask,
+      wager: 15,
+      deadline: new Date(Date.now() + 10000),
+    });
+    assertNotEquals("error" in placed, true, "Bet placement should succeed.");
+    const { bet } = placed as { bet: ID };
+
+    const retrieved = await bets.getBet({ user: testUser, task: testTask });
+    assertNotEquals("error" in retrieved, true, "getBet should succeed for existing bet.");
+    const betDoc = retrieved as { _id: ID; wager: number };
+    assertEquals(betDoc._id, bet, "Retrieved bet should match placed bet.");
+    assertEquals(betDoc.wager, 15, "Retrieved bet should have correct wager.");
+
+    const missing = await bets.getBet({ user: testUser, task: "task:Nonexistent" as ID });
+    assertEquals(
+      "error" in missing,
+      true,
+      "getBet should fail for nonexistent bet.",
+    );
+    assertEquals((missing as { error: string }).error, "Bet not found");
+  });
+
+  await t.step("Query: getActiveBets returns only unresolved bets", async () => {
+    const testUser = "user:Eve" as ID;
+    const task1 = "task:Active1" as ID;
+    const task2 = "task:Active2" as ID;
+    const task3 = "task:Active3" as ID;
+
+    await bets.initializeBettor({ user: testUser });
+    await bets.users.updateOne({ _id: testUser }, { $set: { points: 200 } });
+
+    // Place multiple bets
+    await bets.placeBet({
+      user: testUser,
+      task: task1,
+      wager: 10,
+      deadline: new Date(Date.now() + 5000),
+    });
+    await bets.placeBet({
+      user: testUser,
+      task: task2,
+      wager: 10,
+      deadline: new Date(Date.now() + 5000),
+    });
+    await bets.placeBet({
+      user: testUser,
+      task: task3,
+      wager: 10,
+      deadline: new Date(Date.now() + 5000),
+    });
+
+    // Resolve one
+    await bets.resolveBet({
+      user: testUser,
+      task: task1,
+      completionTime: new Date(Date.now() + 1000),
+    });
+
+    const active = await bets.getActiveBets({ user: testUser });
+    assertNotEquals("error" in active, true, "getActiveBets should succeed.");
+    const activeResult = active as { bets: { task: ID }[] };
+    assertEquals(
+      activeResult.bets.length,
+      2,
+      "Should return 2 active bets (task2 and task3).",
+    );
+    assertEquals(
+      activeResult.bets.every((b) => b.task === task2 || b.task === task3),
+      true,
+      "All returned bets should be active.",
+    );
+  });
+
+  await t.step("Query: getExpiredBets returns only expired unresolved bets", async () => {
+    const testUser = "user:Frank" as ID;
+    const task1 = "task:Expired1" as ID;
+    const task2 = "task:Expired2" as ID;
+
+    await bets.initializeBettor({ user: testUser });
+    await bets.users.updateOne({ _id: testUser }, { $set: { points: 200 } });
+
+    // Place bets with past deadlines (force insert since placeBet validates)
+    const expiredId1 = "expired:1" as ID;
+    const expiredId2 = "expired:2" as ID;
+    await bets.bets.insertOne({
+      _id: expiredId1,
+      user: testUser,
+      task: task1,
+      wager: 10,
+      deadline: new Date(Date.now() - 5000),
+      createdAt: new Date(),
+    });
+    await bets.bets.insertOne({
+      _id: expiredId2,
+      user: testUser,
+      task: task2,
+      wager: 10,
+      deadline: new Date(Date.now() - 3000),
+      createdAt: new Date(),
+    });
+
+    // Place one active bet
+    await bets.placeBet({
+      user: testUser,
+      task: "task:Active" as ID,
+      wager: 10,
+      deadline: new Date(Date.now() + 5000),
+    });
+
+    const expired = await bets.getExpiredBets({ user: testUser });
+    assertNotEquals("error" in expired, true, "getExpiredBets should succeed.");
+    const expiredResult = expired as { bets: { task: ID }[] };
+    assertEquals(
+      expiredResult.bets.length >= 2,
+      true,
+      "Should return at least 2 expired bets.",
+    );
+    assertEquals(
+      expiredResult.bets.every((b) => b.task === task1 || b.task === task2),
+      true,
+      "All returned bets should be expired.",
+    );
+  });
+
+  await t.step("Query: getRecentlyResolvedBets returns resolved bets after timestamp", async () => {
+    const testUser = "user:George" as ID;
+    const task1 = "task:Resolved1" as ID;
+    const task2 = "task:Resolved2" as ID;
+
+    await bets.initializeBettor({ user: testUser });
+    await bets.users.updateOne({ _id: testUser }, { $set: { points: 200 } });
+
+    // Place and resolve bets
+    await bets.placeBet({
+      user: testUser,
+      task: task1,
+      wager: 10,
+      deadline: new Date(Date.now() + 5000),
+    });
+    await bets.placeBet({
+      user: testUser,
+      task: task2,
+      wager: 10,
+      deadline: new Date(Date.now() + 5000),
+    });
+
+    await bets.resolveBet({
+      user: testUser,
+      task: task1,
+      completionTime: new Date(Date.now() + 1000),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    await bets.resolveBet({
+      user: testUser,
+      task: task2,
+      completionTime: new Date(Date.now() + 1000),
+    });
+
+    // Get timestamp before both resolutions
+    const afterTimestamp = new Date(Date.now() - 200);
+
+    const resolved = await bets.getRecentlyResolvedBets({
+      user: testUser,
+      afterTimestamp,
+      limit: 10,
+    });
+    assertNotEquals("error" in resolved, true, "getRecentlyResolvedBets should succeed.");
+    const resolvedResult = resolved as { bets: { task: ID; success: boolean }[] };
+    assertEquals(
+      resolvedResult.bets.length >= 2,
+      true,
+      "Should return at least 2 resolved bets.",
+    );
+    assertEquals(
+      resolvedResult.bets.every((b) => b.success !== undefined),
+      true,
+      "All returned bets should be resolved.",
     );
   });
 

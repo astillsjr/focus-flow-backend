@@ -9,7 +9,7 @@ const PREFIX = "MicroBet" + ".";
 type User = ID;
 type Task = ID;
 
-// Define the types for our entires based on the concept state
+// Define the types for our entries based on the concept state
 type Bet = ID;
 
 /**
@@ -31,6 +31,8 @@ interface UserDoc {
  *   a deadline Date
  *   a taskDueDate? Date
  *   a success? Boolean
+ *   a createdAt Date
+ *   a resolvedAt? Date (optional, set when bet is resolved)
  */
 interface BetDoc {
   _id: Bet;
@@ -44,6 +46,10 @@ interface BetDoc {
   resolvedAt?: Date;
 }
 
+/**
+ * @concept MicroBet
+ * @purpose To motivate users to start tasks through gamified accountability using symbolic or real stakes.
+ */
 export default class MicroBetConcept {
   users: Collection<UserDoc>;
   bets: Collection<BetDoc>;
@@ -124,7 +130,7 @@ export default class MicroBetConcept {
       deadline,
       taskDueDate,
       createdAt: new Date(),
-    }
+    };
 
     try {
       const updated = await this.users.updateOne(
@@ -137,7 +143,7 @@ export default class MicroBetConcept {
       return { bet: newBet._id };
     } catch (_err) {
       await this.users.updateOne({ _id: user }, { $inc: { points: wager } });
-      return { error: "Failed to place bet" }
+      return { error: "Failed to place bet" };
     }
   }
 
@@ -221,9 +227,9 @@ export default class MicroBetConcept {
    * @effects If unresolved, marks the bet as failed and resets the user's streak. 
    *          Otherwise, reports that the bet was already resolved.
    */
-  public async resolveExpiredBet (
+  public async resolveExpiredBet(
     { user, task }: { user: User, task: Task }
-  ): Promise<Empty| { status: "already_resolved" } | { error: string }> {
+  ): Promise<Empty | { status: "already_resolved" } | { error: string }> {
     const userProfile = await this.users.findOne({ _id: user });
     if (!userProfile) return { error: "User profile not found" };
 
