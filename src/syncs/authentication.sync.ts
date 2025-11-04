@@ -184,4 +184,3 @@ export const AutoCascadeDeleteOnAccountDelete: Sync = ({ request, accessToken, u
     [MicroBet.removeBettor, { user: userId }],
   ),
 });
-

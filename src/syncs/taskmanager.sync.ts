@@ -703,33 +703,42 @@ export const GetTaskStatusResponseError: Sync = ({ request, error }) => ({
 // ============================================================================
 
 /**
- * Automatically schedules a nudge when a task is created.
- * Calculates delivery time based on task due date:
- * - If task has due date: halfway point between now and due date, minimum 1 minute delay
- * - If task has no due date or due date is in past: 5 minutes from now
+ * Automatically schedules a nudge when a task is created WITH a due date.
+ * Calculates delivery time as halfway point between now and due date, minimum 1 minute delay.
+ * Note: Due dates in the past are prevented by frontend and backend validation.
  */
-export const AutoScheduleNudgeOnTaskCreate: Sync = ({ user, task, dueDate, deliveryTime }) => ({
+export const AutoScheduleNudgeOnTaskCreateWithDueDate: Sync = ({ user, task, dueDate, deliveryTime }) => ({
   when: actions([TaskManager.createTask, { user, dueDate }, { task }]),
   where: async (frames) => {
     const now = Date.now();
     const oneMinute = 60 * 1000;
+    
+    return frames.map((frame) => {
+      const dueDateValue = frame[dueDate] as Date;
+      // Calculate halfway point between now and due date
+      const timeUntilDue = dueDateValue.getTime() - now;
+      const halfwayTime = now + (timeUntilDue / 2);
+      // Ensure minimum 1 minute delay
+      const calculatedDeliveryTime = new Date(Math.max(halfwayTime, now + oneMinute));
+      
+      return { ...frame, [deliveryTime]: calculatedDeliveryTime };
+    });
+  },
+  then: actions([NudgeEngine.scheduleNudge, { user, task, deliveryTime }]),
+});
+
+/**
+ * Automatically schedules a nudge when a task is created WITHOUT a due date.
+ * Schedules nudge for 5 minutes from now.
+ */
+export const AutoScheduleNudgeOnTaskCreateWithoutDueDate: Sync = ({ user, task, deliveryTime }) => ({
+  when: actions([TaskManager.createTask, { user }, { task }]),
+  where: async (frames) => {
+    const now = Date.now();
     const fiveMinutes = 5 * 60 * 1000;
     
     return frames.map((frame) => {
-      const dueDateValue = frame[dueDate] as Date | undefined;
-      let calculatedDeliveryTime: Date;
-      
-      if (dueDateValue && dueDateValue.getTime() > now) {
-        // Task has a future due date: calculate halfway point
-        const timeUntilDue = dueDateValue.getTime() - now;
-        const halfwayTime = now + (timeUntilDue / 2);
-        // Ensure minimum 1 minute delay
-        calculatedDeliveryTime = new Date(Math.max(halfwayTime, now + oneMinute));
-      } else {
-        // No due date or due date in past: schedule for 5 minutes from now
-        calculatedDeliveryTime = new Date(now + fiveMinutes);
-      }
-      
+      const calculatedDeliveryTime = new Date(now + fiveMinutes);
       return { ...frame, [deliveryTime]: calculatedDeliveryTime };
     });
   },

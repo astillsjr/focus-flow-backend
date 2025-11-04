@@ -3,7 +3,7 @@
  * Handles nudge retrieval and cancellation with user authentication via access tokens.
  * 
  * Note: 
- * - scheduleNudge is BACKEND-ONLY and called automatically via syncs (e.g., AutoScheduleNudgeOnTaskCreate)
+ * - scheduleNudge is BACKEND-ONLY and called automatically via syncs (e.g., AutoScheduleNudgeOnTaskCreateWithDueDate, AutoScheduleNudgeOnTaskCreateWithoutDueDate)
  * - nudgeUser is BACKEND-ONLY and triggered automatically by the background scheduler
  */
 
@@ -14,7 +14,8 @@ import { actions, Sync } from "@engine";
 // SCHEDULE NUDGE
 // ============================================================================
 // NOTE: scheduleNudge is BACKEND-ONLY and called automatically via syncs
-// (e.g., AutoScheduleNudgeOnTaskCreate). It should NOT be exposed to frontend.
+// (e.g., AutoScheduleNudgeOnTaskCreateWithDueDate, AutoScheduleNudgeOnTaskCreateWithoutDueDate). 
+// It should NOT be exposed to frontend.
 // ============================================================================
 
 // ============================================================================
