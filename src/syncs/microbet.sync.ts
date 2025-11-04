@@ -412,4 +412,3 @@ export const GetRecentActivityResponseError: Sync = ({ request, error }) => ({
   ),
   then: actions([Requesting.respond, { request, error }]),
 });
-

@@ -340,4 +340,3 @@ export const GetEmotionStatsResponseError: Sync = ({ request, error }) => ({
   ),
   then: actions([Requesting.respond, { request, error }]),
 });
-
