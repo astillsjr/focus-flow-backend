@@ -621,16 +621,18 @@ This document provides comprehensive API documentation for all concepts in the F
 **Description:** Cancels a scheduled nudge.
 
 **Requirements:**
-- The nudge must exist and must not already be triggered.
+- The nudge must exist. If `force` is false, the nudge must not already be triggered.
 
 **Effects:**
 - Deletes the nudge from the database, preventing future delivery.
+- When `force` is true, deletes the nudge even if it has been triggered (for cleanup operations).
 
 **Request Body:**
 ```json
 {
   "user": "string",
-  "task": "string"
+  "task": "string",
+  "force": "boolean (optional, default: false)"
 }
 ```
 
@@ -733,7 +735,8 @@ This document provides comprehensive API documentation for all concepts in the F
   "user": "string",
   "task": "string",
   "deliveryTime": "Date",
-  "triggered": "boolean"
+  "triggeredAt": "Date (optional, null when not triggered)",
+  "message": "string (optional, set when nudge is triggered)"
 }
 ```
 
@@ -764,15 +767,18 @@ This document provides comprehensive API documentation for all concepts in the F
 
 **Success Response Body:**
 ```json
-[
-  {
-    "_id": "string",
-    "user": "string",
-    "task": "string",
-    "deliveryTime": "Date",
-    "triggered": "boolean"
-  }
-]
+{
+  "nudges": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "deliveryTime": "Date",
+      "triggeredAt": "Date (optional, null when not triggered)",
+      "message": "string (optional, set when nudge is triggered)"
+    }
+  ]
+}
 ```
 
 ---
@@ -793,16 +799,110 @@ This document provides comprehensive API documentation for all concepts in the F
 
 **Success Response Body:**
 ```json
-[
-  {
-    "_id": "string",
-    "user": "string",
-    "task": "string",
-    "deliveryTime": "Date",
-    "triggered": "boolean"
-  }
-]
+{
+  "nudges": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "deliveryTime": "Date",
+      "triggeredAt": "Date (optional, null when not triggered)",
+      "message": "string (optional, set when nudge is triggered)"
+    }
+  ]
+}
 ```
+
+---
+
+### POST /api/NudgeEngine/getReadyNudgesSince
+
+**Description:** Retrieves ready-to-deliver nudges for a user since a given timestamp.
+
+**Effects:**
+- Returns nudges whose delivery time is after the given timestamp, delivery time has arrived, and are not yet triggered.
+
+**Request Body:**
+```json
+{
+  "user": "string",
+  "sinceTimestamp": "Date"
+}
+```
+
+**Success Response Body:**
+```json
+{
+  "nudges": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "deliveryTime": "Date",
+      "triggeredAt": "Date (optional, null when not triggered)",
+      "message": "string (optional, set when nudge is triggered)"
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/NudgeEngine/getNewTriggeredNudges
+
+**Description:** Retrieves triggered nudges newer than a given timestamp.
+
+**Effects:**
+- Returns nudges that were triggered after the specified timestamp.
+
+**Request Body:**
+```json
+{
+  "user": "string",
+  "afterTimestamp": "Date",
+  "limit": "number (optional, default: 50)"
+}
+```
+
+**Success Response Body:**
+```json
+{
+  "nudges": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "deliveryTime": "Date",
+      "triggeredAt": "Date",
+      "message": "string"
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/NudgeEngine/getLastTriggeredTimestamp
+
+**Description:** Retrieves the most recent triggered nudge timestamp for a user.
+
+**Effects:**
+- Returns the timestamp when the last nudge was triggered, or null if never triggered.
+- Used to initialize incremental queries.
+
+**Request Body:**
+```json
+{
+  "user": "string"
+}
+```
+
+**Success Response Body:**
+```json
+"string (ISO 8601 date string) or null"
+```
+
+**Note:** This method returns a Date serialized as an ISO 8601 string, or null if no nudges have been triggered.
 
 ---
 
@@ -1041,7 +1141,8 @@ This document provides comprehensive API documentation for all concepts in the F
   "deadline": "Date",
   "taskDueDate": "Date (optional)",
   "success": "boolean (optional)",
-  "createdAt": "Date"
+  "createdAt": "Date",
+  "resolvedAt": "Date (optional, set when bet is resolved)"
 }
 ```
 
@@ -1115,18 +1216,21 @@ This document provides comprehensive API documentation for all concepts in the F
 
 **Success Response Body:**
 ```json
-[
-  {
-    "_id": "string",
-    "user": "string",
-    "task": "string",
-    "wager": "number",
-    "deadline": "Date",
-    "taskDueDate": "Date (optional)",
-    "success": "boolean (optional)",
-    "createdAt": "Date"
-  }
-]
+{
+  "bets": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "wager": "number",
+      "deadline": "Date",
+      "taskDueDate": "Date (optional)",
+      "success": "boolean (optional)",
+      "createdAt": "Date",
+      "resolvedAt": "Date (optional, set when bet is resolved)"
+    }
+  ]
+}
 ```
 
 **Error Response Body:**
@@ -1196,18 +1300,68 @@ This document provides comprehensive API documentation for all concepts in the F
 
 **Success Response Body:**
 ```json
-[
-  {
-    "_id": "string",
-    "user": "string",
-    "task": "string",
-    "wager": "number",
-    "deadline": "Date",
-    "taskDueDate": "Date (optional)",
-    "success": "boolean (optional)",
-    "createdAt": "Date"
-  }
-]
+{
+  "bets": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "wager": "number",
+      "deadline": "Date",
+      "taskDueDate": "Date (optional)",
+      "success": "boolean (optional)",
+      "createdAt": "Date",
+      "resolvedAt": "Date (optional, set when bet is resolved)"
+    }
+  ]
+}
+```
+
+**Error Response Body:**
+```json
+{
+  "error": "string"
+}
+```
+
+---
+
+### POST /api/MicroBet/getRecentlyResolvedBets
+
+**Description:** Retrieves recently resolved bets for a user (resolved after a timestamp).
+
+**Requirements:**
+- The user must have a betting profile.
+
+**Effects:**
+- Returns bets that have been resolved (success !== undefined) and were resolved after the specified timestamp.
+
+**Request Body:**
+```json
+{
+  "user": "string",
+  "afterTimestamp": "Date",
+  "limit": "number (optional, default: 50)"
+}
+```
+
+**Success Response Body:**
+```json
+{
+  "bets": [
+    {
+      "_id": "string",
+      "user": "string",
+      "task": "string",
+      "wager": "number",
+      "deadline": "Date",
+      "taskDueDate": "Date (optional)",
+      "success": "boolean",
+      "createdAt": "Date",
+      "resolvedAt": "Date"
+    }
+  ]
+}
 ```
 
 **Error Response Body:**
@@ -1221,7 +1375,7 @@ This document provides comprehensive API documentation for all concepts in the F
 
 ## EmotionLogger Concept
 
-**Purpose:** To help users recognize and reframe unhelpful emotional patterns around task initiation.
+**Purpose:** To track and analyze user emotions before and after task completion, enabling self-awareness and emotional pattern recognition.
 
 ---
 
@@ -1484,11 +1638,119 @@ This document provides comprehensive API documentation for all concepts in the F
 
 ---
 
+## Requesting Concept
+
+**Purpose:** To encapsulate an API server, modeling incoming requests and outgoing responses as concept actions. This concept enables request/response patterns and provides a unified event stream for real-time notifications.
+
+---
+
+### POST /api/Requesting/request
+
+**Description:** System action triggered by an external HTTP request.
+
+**Requirements:**
+- Always true.
+
+**Effects:**
+- Creates a new Request `r`; sets the input of `r` to be the path and all other input parameters; returns `r` as `request`.
+
+**Request Body:**
+```json
+{
+  "path": "string",
+  "[key: string]": "unknown"
+}
+```
+
+**Success Response Body:**
+```json
+{
+  "request": "string"
+}
+```
+
+---
+
+### POST /api/Requesting/respond
+
+**Description:** Sets the response for a request.
+
+**Requirements:**
+- A Request with the given `request` id exists and has no response yet.
+
+**Effects:**
+- Sets the response of the given Request to the provided key-value pairs.
+
+**Request Body:**
+```json
+{
+  "request": "string",
+  "[key: string]": "unknown"
+}
+```
+
+**Success Response Body:**
+```json
+{
+  "request": "string"
+}
+```
+
+---
+
+### POST /api/Requesting/_awaitResponse
+
+**Description:** Returns the response associated with the given request, waiting if necessary up to a configured timeout.
+
+**Effects:**
+- Returns the response associated with the given request, waiting if necessary up to a configured timeout.
+
+**Request Body:**
+```json
+{
+  "request": "string"
+}
+```
+
+**Success Response Body:**
+```json
+[
+  {
+    "response": "unknown"
+  }
+]
+```
+
+**Note:** This is a query method (indicated by the `_` prefix) and returns an array of results.
+
+---
+
+### GET /api/events/stream
+
+**Description:** Unified Server-Sent Events (SSE) stream endpoint.
+
+**Purpose:**
+- Provides real-time notifications for multiple event types via SSE:
+  - Nudge notifications (when nudges become ready)
+  - Bet events (when bets are resolved or expire)
+
+**Query Parameters:**
+- `accessToken` (required): User's access token for authentication
+
+**Response:**
+- Stream of Server-Sent Events with event types and data
+
+**Note:** This is a GET endpoint (not POST) and uses Server-Sent Events for streaming.
+
+---
+
 ## Notes
 
 - All Date fields should be sent as ISO 8601 formatted strings (e.g., `"2023-10-15T14:30:00Z"`).
-- All ID fields (user, task, bet, nudge, log) are strings.
+- All ID fields (user, task, bet, nudge, log, request) are strings.
 - Optional fields can be omitted from request bodies.
-- Array responses indicate query methods (methods that retrieve lists of data).
+- Array responses indicate query methods (methods that retrieve lists of data, starting with `_`).
 - Single object responses indicate action methods (methods that perform operations).
+- Methods that return arrays wrapped in objects (e.g., `{ nudges: [...] }`) are action methods that return structured data.
+- The `getTaskStatus` endpoint requires a full Task document object as input, which should be obtained via `getTask` first.
 
